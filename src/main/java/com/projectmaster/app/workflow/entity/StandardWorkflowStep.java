@@ -41,4 +41,8 @@ public class StandardWorkflowStep extends BaseEntity {
     @JdbcTypeCode(SqlTypes.JSON)
     @Convert(converter = JsonbConverter.class)
     private String requirements;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "specialty_id", nullable = false)
+    private Specialty specialty;
 }

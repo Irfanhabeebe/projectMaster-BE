@@ -11,6 +11,8 @@ import com.projectmaster.app.user.entity.Company;
 import com.projectmaster.app.user.entity.User;
 import com.projectmaster.app.user.repository.CompanyRepository;
 import com.projectmaster.app.user.repository.UserRepository;
+import com.projectmaster.app.contractor.entity.ContractingCompany;
+import com.projectmaster.app.contractor.repository.ContractingCompanyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -33,6 +35,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
+    private final ContractingCompanyRepository contractingCompanyRepository;
     private final SimplePasswordEncoder passwordEncoder;
 
     public UserDto createUser(CreateUserRequest request, Authentication authentication) {
@@ -105,12 +108,24 @@ public class UserService {
 
         // Handle company assignment for internal calls
         Company company = null;
+        ContractingCompany contractingCompany = null;
+        
         if (request.getRole() != UserRole.SUPER_USER) {
             if (request.getCompanyId() == null) {
                 throw new ProjectMasterException("Company ID is required for non-super user roles in internal calls", "COMPANY_ID_REQUIRED");
             }
-            company = companyRepository.findById(request.getCompanyId())
-                    .orElseThrow(() -> new EntityNotFoundException("Company", request.getCompanyId()));
+            
+            // Determine company type and find the appropriate company
+            if ("CONTRACTING".equals(request.getCompanyType())) {
+                contractingCompany = contractingCompanyRepository.findById(request.getCompanyId())
+                        .orElseThrow(() -> new EntityNotFoundException("Contracting Company", request.getCompanyId()));
+                log.info("Found contracting company: {}", contractingCompany.getName());
+            } else {
+                // Default to builder company if type is not specified or is "BUILDER"
+                company = companyRepository.findById(request.getCompanyId())
+                        .orElseThrow(() -> new EntityNotFoundException("Company", request.getCompanyId()));
+                log.info("Found builder company: {}", company.getName());
+            }
         } else {
             // Super users should not have a company
             if (request.getCompanyId() != null) {
@@ -121,6 +136,7 @@ public class UserService {
         // Create user
         User user = User.builder()
                 .company(company)
+                .contractingCompany(contractingCompany)
                 .email(request.getEmail().toLowerCase())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .firstName(request.getFirstName())

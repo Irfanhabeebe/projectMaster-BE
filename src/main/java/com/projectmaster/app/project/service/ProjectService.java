@@ -480,6 +480,7 @@ public class ProjectService {
                     .estimatedHours(workflowStep.getEstimatedHours())
                     .requiredSkills(workflowStep.getRequiredSkills())
                     .requirements(workflowStep.getRequirements())
+                    .specialty(workflowStep.getSpecialty()) // Copy the specialty from workflow step
                     // Version tracking
                     .workflowStepVersion(workflowStep.getVersion())
                     .build();

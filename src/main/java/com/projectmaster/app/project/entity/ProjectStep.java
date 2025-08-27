@@ -4,6 +4,7 @@ import com.projectmaster.app.common.entity.BaseEntity;
 import com.projectmaster.app.common.enums.StageStatus;
 import com.projectmaster.app.common.converter.JsonbConverter;
 import com.projectmaster.app.workflow.entity.WorkflowStep;
+import com.projectmaster.app.workflow.entity.Specialty;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -77,4 +78,8 @@ public class ProjectStep extends BaseEntity {
     // Version tracking
     @Column(name = "workflow_step_version")
     private Integer workflowStepVersion;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "specialty_id", nullable = false)
+    private Specialty specialty;
 }

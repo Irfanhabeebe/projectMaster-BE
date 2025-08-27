@@ -162,6 +162,7 @@ public class WorkflowCopyService {
                 .estimatedHours(standardStep.getEstimatedHours())
                 .requiredSkills(standardStep.getRequiredSkills())
                 .requirements(standardStep.getRequirements())
+                .specialty(standardStep.getSpecialty()) // Copy the specialty
                 .version(1)
                 .build();
         

@@ -2,6 +2,7 @@ package com.projectmaster.app.user.entity;
 
 import com.projectmaster.app.common.entity.BaseEntity;
 import com.projectmaster.app.common.enums.UserRole;
+import com.projectmaster.app.contractor.entity.ContractingCompany;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -19,6 +20,10 @@ public class User extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = true)
     private Company company;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "contracting_company_id", nullable = true)
+    private ContractingCompany contractingCompany;
 
     @Column(name = "email", unique = true, nullable = false)
     private String email;

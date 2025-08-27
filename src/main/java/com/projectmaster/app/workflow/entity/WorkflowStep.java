@@ -45,4 +45,8 @@ public class WorkflowStep extends BaseEntity {
     @Builder.Default
     @Column(name = "version", nullable = false)
     private Integer version = 1;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "specialty_id", nullable = false)
+    private Specialty specialty;
 }

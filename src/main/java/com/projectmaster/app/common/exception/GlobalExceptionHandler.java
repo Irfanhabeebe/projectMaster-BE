@@ -28,6 +28,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ProjectMasterException.class)
     public ResponseEntity<ApiResponse<Void>> handleProjectMasterException(ProjectMasterException ex) {
+        // Handle access control errors separately (no stack trace, FORBIDDEN status)
+        if ("COMPANY_ACCESS_DENIED".equals(ex.getErrorCode())) {
+            log.warn("Access denied: {}", ex.getMessage());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(ex.getMessage()));
+        }
+        
+        // Handle other ProjectMaster exceptions with full logging
         log.error("ProjectMaster exception: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(ex.getMessage()));

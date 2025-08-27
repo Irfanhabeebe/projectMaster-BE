@@ -14,7 +14,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "projects")
+@Table(name = "projects", uniqueConstraints = {
+    @UniqueConstraint(columnNames = {"company_id", "project_number"}, name = "uk_projects_company_project_number")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -34,7 +36,7 @@ public class Project extends BaseEntity {
     @JoinColumn(name = "workflow_template_id", nullable = false)
     private WorkflowTemplate workflowTemplate;
 
-    @Column(name = "project_number", unique = true, nullable = false, length = 50)
+    @Column(name = "project_number", nullable = false, length = 50)
     private String projectNumber;
 
     @Column(name = "name", nullable = false)
