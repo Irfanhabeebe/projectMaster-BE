@@ -5,6 +5,7 @@ import com.projectmaster.app.workflow.dto.WorkflowExecutionResult;
 import com.projectmaster.app.workflow.dto.WorkflowTemplateDto;
 import com.projectmaster.app.workflow.service.WorkflowService;
 import com.projectmaster.app.security.service.JwtService;
+import com.projectmaster.app.security.service.CustomUserDetailsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +26,50 @@ public class WorkflowController {
     
     private final WorkflowService workflowService;
     private final JwtService jwtService;
+    
+    /**
+     * Accept a project step assignment
+     */
+    @PostMapping("/assignments/{assignmentId}/accept")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PROJECT_MANAGER') or hasRole('TRADIE')")
+    public ResponseEntity<ApiResponse<WorkflowExecutionResult>> acceptAssignment(
+            @PathVariable UUID assignmentId,
+            Authentication authentication) {
+        
+        log.info("Accepting assignment {}", assignmentId);
+        
+        UUID userId = getCurrentUserId(authentication);
+        WorkflowExecutionResult result = workflowService.acceptAssignment(assignmentId, userId);
+        
+        return ResponseEntity.ok(ApiResponse.<WorkflowExecutionResult>builder()
+                .success(result.isSuccess())
+                .message(result.getMessage())
+                .data(result)
+                .build());
+    }
+    
+    /**
+     * Decline a project step assignment
+     */
+    @PostMapping("/assignments/{assignmentId}/decline")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PROJECT_MANAGER') or hasRole('TRADIE')")
+    public ResponseEntity<ApiResponse<WorkflowExecutionResult>> declineAssignment(
+            @PathVariable UUID assignmentId,
+            Authentication authentication) {
+        
+        log.info("Declining assignment {}", assignmentId);
+        
+        UUID userId = getCurrentUserId(authentication);
+        WorkflowExecutionResult result = workflowService.declineAssignment(assignmentId, userId);
+        
+        return ResponseEntity.ok(ApiResponse.<WorkflowExecutionResult>builder()
+                .success(result.isSuccess())
+                .message(result.getMessage())
+                .data(result)
+                .build());
+    }
+    
+
     
     /**
      * Start a project stage
@@ -181,9 +226,9 @@ public class WorkflowController {
     }
     
     private UUID getCurrentUserId(Authentication authentication) {
-        // TODO: Extract user ID from authentication
-        // For now, return a placeholder
-        return UUID.randomUUID();
+        CustomUserDetailsService.CustomUserPrincipal userPrincipal =
+                (CustomUserDetailsService.CustomUserPrincipal) authentication.getPrincipal();
+        return userPrincipal.getUser().getId();
     }
     
     private UUID getCompanyIdFromJwt(HttpServletRequest request) {

@@ -1,4 +1,4 @@
-package com.projectmaster.app.user.entity;
+package com.projectmaster.app.company.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.projectmaster.app.common.entity.BaseEntity;

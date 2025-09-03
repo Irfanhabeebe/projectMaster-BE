@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import java.time.Instant;
 
 @Data
 @Builder
@@ -153,7 +154,7 @@ public class ProjectWorkflowResponse {
         private String description;
 
         @Schema(description = "Step status")
-        private StageStatus status;
+        private com.projectmaster.app.project.entity.ProjectStep.StepExecutionStatus status;
 
         @Schema(description = "Step order index")
         private Integer orderIndex;
@@ -184,5 +185,40 @@ public class ProjectWorkflowResponse {
 
         @Schema(description = "Requirements (JSON object)")
         private String requirements;
+
+        @Schema(description = "Specialty required for this step")
+        private SpecialtyResponse specialty;
+
+        @Schema(description = "Step assignments")
+        private List<ProjectStepAssignmentResponse> assignments;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Schema(description = "Specialty information")
+    public static class SpecialtyResponse {
+
+        @Schema(description = "Specialty ID")
+        private UUID id;
+
+        @Schema(description = "Specialty name")
+        private String name;
+
+        @Schema(description = "Specialty description")
+        private String description;
+
+        @Schema(description = "Specialty category")
+        private String category;
+
+        @Schema(description = "Specialty active status")
+        private Boolean active;
+
+        @Schema(description = "Specialty creation date")
+        private Instant createdAt;
+
+        @Schema(description = "Specialty last update date")
+        private Instant updatedAt;
     }
 } 

@@ -1,10 +1,14 @@
 package com.projectmaster.app.workflow.engine;
 
 import com.projectmaster.app.common.enums.StageStatus;
+import com.projectmaster.app.project.entity.ProjectStep.StepExecutionStatus;
 import com.projectmaster.app.project.entity.ProjectStage;
 import com.projectmaster.app.project.entity.ProjectStep;
+import com.projectmaster.app.project.entity.ProjectStepAssignment;
+import com.projectmaster.app.project.entity.ProjectStepAssignment.AssignmentStatus;
 import com.projectmaster.app.project.entity.ProjectTask;
 import com.projectmaster.app.project.repository.ProjectStageRepository;
+import com.projectmaster.app.project.repository.ProjectStepAssignmentRepository;
 import com.projectmaster.app.project.repository.ProjectStepRepository;
 import com.projectmaster.app.project.repository.ProjectTaskRepository;
 import com.projectmaster.app.task.repository.TaskRepository;
@@ -18,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Component
@@ -28,6 +33,7 @@ public class StateManager {
     
     private final ProjectStageRepository projectStageRepository;
     private final ProjectStepRepository projectStepRepository;
+    private final ProjectStepAssignmentRepository projectStepAssignmentRepository;
     private final ProjectTaskRepository projectTaskRepository;
     private final TaskRepository taskRepository;
     
@@ -47,6 +53,9 @@ public class StateManager {
             case TASK:
                 updateTaskState(context, result);
                 break;
+            case ASSIGNMENT:
+                updateAssignmentState(context, result);
+                break;
             default:
                 log.warn("Unknown workflow level: {}", result.getTargetLevel());
         }
@@ -59,7 +68,7 @@ public class StateManager {
     
     private void updateStageState(WorkflowExecutionContext context, WorkflowExecutionResult result) {
         ProjectStage stage = context.getProjectStage();
-        StageStatus newStatus = result.getNewStatus();
+        StageStatus newStatus = (StageStatus) result.getNewStatus();
         
         log.debug("Updating stage {} from {} to {}", 
                 stage.getId(), stage.getStatus(), newStatus);
@@ -81,14 +90,22 @@ public class StateManager {
     
     private void updateStepState(WorkflowExecutionContext context, WorkflowExecutionResult result) {
         ProjectStep step = context.getProjectStep();
+        StepExecutionStatus newStatus = (StepExecutionStatus) result.getNewStatus();
         
-        log.debug("Updating step {} state", step.getId());
+        log.debug("Updating step {} from {} to {}", 
+                step.getId(), step.getStatus(), newStatus);
         
-        // Update step timestamps and status based on result
+        step.setStatus(newStatus);
         step.setUpdatedAt(Instant.now());
         
-        // TODO: Add step status enum and update logic
+        if (newStatus == StepExecutionStatus.IN_PROGRESS && step.getActualStartDate() == null) {
+            step.setActualStartDate(LocalDate.now());
+        } else if (newStatus == StepExecutionStatus.COMPLETED) {
+            step.setActualEndDate(LocalDate.now());
+        }
+        
         projectStepRepository.save(step);
+        log.info("Step {} status updated to {}", step.getId(), newStatus);
         
         // Check if all steps in task are completed to auto-complete task
         checkTaskCompletion(step.getProjectTask());
@@ -97,6 +114,26 @@ public class StateManager {
     private void updateTaskState(WorkflowExecutionContext context, WorkflowExecutionResult result) {
         // TODO: Implement task state updates
         log.debug("Updating task state");
+    }
+    
+    private void updateAssignmentState(WorkflowExecutionContext context, WorkflowExecutionResult result) {
+        ProjectStepAssignment assignment = context.getProjectStepAssignment();
+        AssignmentStatus newStatus = (AssignmentStatus) result.getNewStatus();
+        
+        log.debug("Updating assignment {} from {} to {}", 
+                assignment.getId(), assignment.getStatus(), newStatus);
+        
+        assignment.setStatus(newStatus);
+        assignment.setUpdatedAt(Instant.now());
+        
+        if (newStatus == AssignmentStatus.ACCEPTED) {
+            assignment.setAcceptedDate(LocalDateTime.now());
+        } else if (newStatus == AssignmentStatus.DECLINED) {
+            assignment.setDeclinedDate(LocalDateTime.now());
+        }
+        
+        projectStepAssignmentRepository.save(assignment);
+        log.info("Assignment {} status updated to {}", assignment.getId(), newStatus);
     }
     
     private void autoStartNextStage(ProjectStage completedStage) {
@@ -128,7 +165,7 @@ public class StateManager {
         
         // Check if all steps are completed
         boolean allCompleted = allSteps.stream()
-                .allMatch(step -> step.getStatus() == StageStatus.COMPLETED);
+                .allMatch(step -> step.getStatus() == StepExecutionStatus.COMPLETED);
         
         if (allCompleted && !allSteps.isEmpty() && task.getStatus() == StageStatus.IN_PROGRESS) {
             log.info("All steps completed, marking task {} as completed", task.getId());

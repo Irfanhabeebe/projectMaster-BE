@@ -4,5 +4,6 @@ public enum WorkflowLevel {
     PROJECT,
     STAGE,
     STEP,
-    TASK
+    TASK,
+    ASSIGNMENT
 }

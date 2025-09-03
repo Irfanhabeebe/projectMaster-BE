@@ -1,4 +1,4 @@
-package com.projectmaster.app.user.dto;
+package com.projectmaster.app.company.dto;
 
 import com.projectmaster.app.common.enums.UserRole;
 import jakarta.validation.constraints.Email;

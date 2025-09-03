@@ -119,6 +119,40 @@ public class WorkflowService {
     }
     
     /**
+     * Accept a project step assignment
+     */
+    public WorkflowExecutionResult acceptAssignment(UUID assignmentId, UUID userId) {
+        WorkflowExecutionRequest request = WorkflowExecutionRequest.builder()
+                .assignmentId(assignmentId)
+                .userId(userId)
+                .action(com.projectmaster.app.workflow.dto.WorkflowAction.builder()
+                        .type(com.projectmaster.app.workflow.enums.WorkflowActionType.ACCEPT_ASSIGNMENT)
+                        .targetId(assignmentId)
+                        .build())
+                .build();
+        
+        return executeWorkflow(request);
+    }
+    
+    /**
+     * Decline a project step assignment
+     */
+    public WorkflowExecutionResult declineAssignment(UUID assignmentId, UUID userId) {
+        WorkflowExecutionRequest request = WorkflowExecutionRequest.builder()
+                .assignmentId(assignmentId)
+                .userId(userId)
+                .action(com.projectmaster.app.workflow.dto.WorkflowAction.builder()
+                        .type(com.projectmaster.app.workflow.enums.WorkflowActionType.DECLINE_ASSIGNMENT)
+                        .targetId(assignmentId)
+                        .build())
+                .build();
+        
+        return executeWorkflow(request);
+    }
+    
+
+    
+    /**
      * Get workflow templates by company ID
      */
     @Transactional(readOnly = true)

@@ -1,4 +1,4 @@
-package com.projectmaster.app.user.dto;
+package com.projectmaster.app.company.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

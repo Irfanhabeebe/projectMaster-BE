@@ -11,8 +11,9 @@ import com.projectmaster.app.project.repository.ProjectRepository;
 import com.projectmaster.app.project.repository.ProjectStageRepository;
 import com.projectmaster.app.project.repository.ProjectTaskRepository;
 import com.projectmaster.app.project.repository.ProjectStepRepository;
+import com.projectmaster.app.project.service.ProjectStepAssignmentService;
 import com.projectmaster.app.security.service.CustomUserDetailsService;
-import com.projectmaster.app.user.entity.Company;
+import com.projectmaster.app.company.entity.Company;
 import com.projectmaster.app.user.entity.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,9 @@ class ProjectServiceTest {
 
     @Mock
     private ProjectStepRepository projectStepRepository;
+
+    @Mock
+    private ProjectStepAssignmentService projectStepAssignmentService;
 
     @Mock
     private CustomUserDetailsService.CustomUserPrincipal userPrincipal;
@@ -101,7 +105,7 @@ class ProjectServiceTest {
         testStep = ProjectStep.builder()
                 .name("Test Step")
                 .description("Test Step Description")
-                .status(StageStatus.NOT_STARTED)
+                .status(com.projectmaster.app.project.entity.ProjectStep.StepExecutionStatus.NOT_STARTED)
                 .orderIndex(1)
                 .projectTask(testTask)
                 .build();
@@ -119,6 +123,8 @@ class ProjectServiceTest {
                 .thenReturn(List.of(testTask));
         when(projectStepRepository.findByProjectTaskIdOrderByOrderIndex(testTask.getId()))
                 .thenReturn(List.of(testStep));
+        when(projectStepAssignmentService.getAssignmentsByProjectStep(testStep.getId()))
+                .thenReturn(List.of());
 
         // Act
         ProjectWorkflowResponse result = projectService.getProjectWorkflow(testProject.getId(), userPrincipal);
@@ -164,6 +170,8 @@ class ProjectServiceTest {
                 .thenReturn(List.of(testTask));
         when(projectStepRepository.findByProjectTaskIdOrderByOrderIndex(testTask.getId()))
                 .thenReturn(List.of(testStep));
+        when(projectStepAssignmentService.getAssignmentsByProjectStep(testStep.getId()))
+                .thenReturn(List.of());
 
         // Act
         ProjectWorkflowResponse result = projectService.getProjectWorkflow(testProject.getId(), userPrincipal);

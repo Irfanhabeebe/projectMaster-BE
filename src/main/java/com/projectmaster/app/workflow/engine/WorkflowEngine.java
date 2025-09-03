@@ -73,8 +73,9 @@ public class WorkflowEngine {
     }
     
     private void validateExecution(WorkflowExecutionRequest request) {
-        if (request.getProjectId() == null) {
-            throw new WorkflowException("Project ID is required");
+        // For assignment-level operations, we can derive projectId from assignmentId
+        if (request.getProjectId() == null && request.getAssignmentId() == null) {
+            throw new WorkflowException("Either Project ID or Assignment ID is required");
         }
         
         if (request.getAction() == null) {

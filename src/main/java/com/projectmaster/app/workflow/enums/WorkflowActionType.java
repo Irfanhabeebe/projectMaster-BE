@@ -18,5 +18,8 @@ public enum WorkflowActionType {
     REJECT_TASK,
     BLOCK_WORKFLOW,
     UNBLOCK_WORKFLOW,
-    CANCEL_WORKFLOW
+    CANCEL_WORKFLOW,
+               // Assignment-specific actions
+           ACCEPT_ASSIGNMENT,
+           DECLINE_ASSIGNMENT
 }

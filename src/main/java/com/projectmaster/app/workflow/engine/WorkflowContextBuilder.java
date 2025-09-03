@@ -4,9 +4,11 @@ import com.projectmaster.app.common.exception.EntityNotFoundException;
 import com.projectmaster.app.project.entity.Project;
 import com.projectmaster.app.project.entity.ProjectStage;
 import com.projectmaster.app.project.entity.ProjectStep;
+import com.projectmaster.app.project.entity.ProjectStepAssignment;
 import com.projectmaster.app.project.entity.ProjectTask;
 import com.projectmaster.app.project.repository.ProjectRepository;
 import com.projectmaster.app.project.repository.ProjectStageRepository;
+import com.projectmaster.app.project.repository.ProjectStepAssignmentRepository;
 import com.projectmaster.app.project.repository.ProjectStepRepository;
 import com.projectmaster.app.project.repository.ProjectTaskRepository;
 import com.projectmaster.app.user.entity.User;
@@ -26,14 +28,25 @@ public class WorkflowContextBuilder {
     private final ProjectStageRepository projectStageRepository;
     private final ProjectTaskRepository projectTaskRepository;
     private final ProjectStepRepository projectStepRepository;
+    private final ProjectStepAssignmentRepository projectStepAssignmentRepository;
     private final UserRepository userRepository;
     
     public WorkflowExecutionContext buildContext(WorkflowExecutionRequest request) {
         log.debug("Building workflow execution context for project: {}", request.getProjectId());
         
-        // Load project
-        Project project = projectRepository.findById(request.getProjectId())
-                .orElseThrow(() -> new EntityNotFoundException("Project not found: " + request.getProjectId()));
+        // Load project - either directly or derive from assignment
+        Project project;
+        if (request.getProjectId() != null) {
+            project = projectRepository.findById(request.getProjectId())
+                    .orElseThrow(() -> new EntityNotFoundException("Project not found: " + request.getProjectId()));
+        } else if (request.getAssignmentId() != null) {
+            // Load assignment first to get project context
+            ProjectStepAssignment assignment = projectStepAssignmentRepository.findById(request.getAssignmentId())
+                    .orElseThrow(() -> new EntityNotFoundException("Project step assignment not found: " + request.getAssignmentId()));
+            project = assignment.getProjectStep().getProjectTask().getProjectStage().getProject();
+        } else {
+            throw new EntityNotFoundException("Either projectId or assignmentId must be provided");
+        }
         
         // Load user
         User user = userRepository.findById(request.getUserId())
@@ -53,11 +66,20 @@ public class WorkflowContextBuilder {
                     .orElseThrow(() -> new EntityNotFoundException("Project task not found: " + request.getTaskId()));
         }
         
-        // Load step if specified
+        // Load assignment if specified
+        ProjectStepAssignment projectStepAssignment = null;
+        if (request.getAssignmentId() != null) {
+            projectStepAssignment = projectStepAssignmentRepository.findById(request.getAssignmentId())
+                    .orElseThrow(() -> new EntityNotFoundException("Project step assignment not found: " + request.getAssignmentId()));
+        }
+        
+        // Load step if specified or derive from assignment
         ProjectStep projectStep = null;
         if (request.getStepId() != null) {
             projectStep = projectStepRepository.findById(request.getStepId())
                     .orElseThrow(() -> new EntityNotFoundException("Project step not found: " + request.getStepId()));
+        } else if (projectStepAssignment != null) {
+            projectStep = projectStepAssignment.getProjectStep();
         }
         
         return WorkflowExecutionContext.builder()
@@ -65,6 +87,7 @@ public class WorkflowContextBuilder {
                 .projectStage(projectStage)
                 .projectTask(projectTask)
                 .projectStep(projectStep)
+                .projectStepAssignment(projectStepAssignment)
                 .workflowStage(projectStage != null ? projectStage.getWorkflowStage() : null)
                 .workflowTask(projectTask != null ? projectTask.getWorkflowTask() : null)
                 .workflowStep(projectStep != null ? projectStep.getWorkflowStep() : null)

@@ -2,7 +2,7 @@ package com.projectmaster.app.customer.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.projectmaster.app.common.entity.BaseEntity;
-import com.projectmaster.app.user.entity.Company;
+import com.projectmaster.app.company.entity.Company;
 import jakarta.persistence.*;
 import lombok.*;
 

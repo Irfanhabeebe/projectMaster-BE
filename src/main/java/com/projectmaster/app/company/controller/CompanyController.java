@@ -1,8 +1,8 @@
-package com.projectmaster.app.user.controller;
+package com.projectmaster.app.company.controller;
 
 import com.projectmaster.app.common.dto.ApiResponse;
-import com.projectmaster.app.user.dto.CompanyDto;
-import com.projectmaster.app.user.service.CompanyService;
+import com.projectmaster.app.company.dto.CompanyDto;
+import com.projectmaster.app.company.service.CompanyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

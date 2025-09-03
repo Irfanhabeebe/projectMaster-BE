@@ -12,6 +12,7 @@ import com.projectmaster.app.customer.repository.CustomerRepository;
 import com.projectmaster.app.project.dto.CreateProjectRequest;
 import com.projectmaster.app.project.dto.ProjectDto;
 import com.projectmaster.app.project.dto.ProjectWorkflowResponse;
+import com.projectmaster.app.project.dto.ProjectStepAssignmentResponse;
 import com.projectmaster.app.project.dto.UpdateProjectRequest;
 import com.projectmaster.app.project.entity.Project;
 import com.projectmaster.app.project.entity.ProjectStage;
@@ -22,10 +23,10 @@ import com.projectmaster.app.project.repository.ProjectStageRepository;
 import com.projectmaster.app.project.repository.ProjectTaskRepository;
 import com.projectmaster.app.project.repository.ProjectStepRepository;
 import com.projectmaster.app.security.service.CustomUserDetailsService;
-import com.projectmaster.app.user.entity.Company;
+import com.projectmaster.app.company.entity.Company;
 import com.projectmaster.app.user.entity.User;
 import com.projectmaster.app.common.enums.UserRole;
-import com.projectmaster.app.user.repository.CompanyRepository;
+import com.projectmaster.app.company.repository.CompanyRepository;
 import com.projectmaster.app.workflow.entity.WorkflowTemplate;
 import com.projectmaster.app.workflow.entity.WorkflowStage;
 import com.projectmaster.app.workflow.entity.WorkflowTask;
@@ -62,6 +63,7 @@ public class ProjectService {
     private final WorkflowStageRepository workflowStageRepository;
     private final WorkflowTaskRepository workflowTaskRepository;
     private final WorkflowStepRepository workflowStepRepository;
+    private final ProjectStepAssignmentService projectStepAssignmentService;
 
     /**
      * Create a new project
@@ -473,7 +475,7 @@ public class ProjectService {
                     .projectTask(projectTask)
                     .workflowStep(workflowStep)
                     .name(workflowStep.getName())
-                    .status(com.projectmaster.app.common.enums.StageStatus.NOT_STARTED)
+                    .status(com.projectmaster.app.project.entity.ProjectStep.StepExecutionStatus.NOT_STARTED)
                     // Copy all properties from WorkflowStep
                     .description(workflowStep.getDescription())
                     .orderIndex(workflowStep.getOrderIndex())
@@ -643,6 +645,23 @@ public class ProjectService {
      * Convert ProjectStep entity to ProjectStepResponse DTO
      */
     private ProjectWorkflowResponse.ProjectStepResponse convertToStepResponse(ProjectStep projectStep) {
+        // Get assignments for this step
+        List<ProjectStepAssignmentResponse> assignments = projectStepAssignmentService.getAssignmentsByProjectStep(projectStep.getId());
+        
+        // Convert specialty to response
+        ProjectWorkflowResponse.SpecialtyResponse specialtyResponse = null;
+        if (projectStep.getSpecialty() != null) {
+            specialtyResponse = ProjectWorkflowResponse.SpecialtyResponse.builder()
+                    .id(projectStep.getSpecialty().getId())
+                    .name(projectStep.getSpecialty().getSpecialtyName())
+                    .description(projectStep.getSpecialty().getDescription())
+                    .category(projectStep.getSpecialty().getSpecialtyType())
+                    .active(projectStep.getSpecialty().getActive())
+                    .createdAt(projectStep.getSpecialty().getCreatedAt())
+                    .updatedAt(projectStep.getSpecialty().getUpdatedAt())
+                    .build();
+        }
+
         return ProjectWorkflowResponse.ProjectStepResponse.builder()
                 .id(projectStep.getId())
                 .name(projectStep.getName())
@@ -658,6 +677,8 @@ public class ProjectService {
                 .qualityCheckPassed(projectStep.getQualityCheckPassed())
                 .requiredSkills(projectStep.getRequiredSkills())
                 .requirements(projectStep.getRequirements())
+                .specialty(specialtyResponse)
+                .assignments(assignments)
                 .build();
     }
 

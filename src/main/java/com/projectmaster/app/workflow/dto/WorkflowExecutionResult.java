@@ -1,6 +1,5 @@
 package com.projectmaster.app.workflow.dto;
 
-import com.projectmaster.app.common.enums.StageStatus;
 import com.projectmaster.app.workflow.enums.WorkflowLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,7 +17,7 @@ public class WorkflowExecutionResult {
     private boolean success;
     private String message;
     private WorkflowLevel targetLevel;
-    private StageStatus newStatus;
+    private Object newStatus; // Changed to Object to support different status types
     private List<String> errors;
     private List<String> warnings;
     private Map<String, Object> resultData;

@@ -1,12 +1,13 @@
-package com.projectmaster.app.user.service;
+package com.projectmaster.app.company.service;
 
 import com.projectmaster.app.common.enums.UserRole;
 import com.projectmaster.app.common.exception.EntityNotFoundException;
 import com.projectmaster.app.common.exception.ProjectMasterException;
-import com.projectmaster.app.user.dto.CompanyDto;
+import com.projectmaster.app.company.dto.CompanyDto;
+import com.projectmaster.app.company.entity.Company;
+import com.projectmaster.app.company.repository.CompanyRepository;
 import com.projectmaster.app.user.dto.CreateUserRequest;
-import com.projectmaster.app.user.entity.Company;
-import com.projectmaster.app.user.repository.CompanyRepository;
+import com.projectmaster.app.user.service.UserService;
 import com.projectmaster.app.workflow.service.WorkflowCopyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

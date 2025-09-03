@@ -17,6 +17,7 @@ public class WorkflowExecutionRequest {
     private UUID stageId;
     private UUID taskId;
     private UUID stepId;
+    private UUID assignmentId;
     private WorkflowAction action;
     private UUID userId;
     private Map<String, Object> metadata;

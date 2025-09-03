@@ -5,7 +5,7 @@ import com.projectmaster.app.common.entity.BaseEntity;
 import com.projectmaster.app.common.enums.ProjectStatus;
 import com.projectmaster.app.customer.entity.Address;
 import com.projectmaster.app.customer.entity.Customer;
-import com.projectmaster.app.user.entity.Company;
+import com.projectmaster.app.company.entity.Company;
 import com.projectmaster.app.workflow.entity.WorkflowTemplate;
 import jakarta.persistence.*;
 import lombok.*;

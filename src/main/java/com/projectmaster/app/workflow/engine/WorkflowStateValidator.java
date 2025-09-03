@@ -1,6 +1,9 @@
 package com.projectmaster.app.workflow.engine;
 
 import com.projectmaster.app.common.enums.StageStatus;
+import com.projectmaster.app.project.entity.ProjectStep.StepExecutionStatus;
+import com.projectmaster.app.project.entity.ProjectStepAssignment;
+import com.projectmaster.app.project.entity.ProjectStepAssignment.AssignmentStatus;
 import com.projectmaster.app.workflow.dto.WorkflowExecutionContext;
 import com.projectmaster.app.workflow.enums.WorkflowActionType;
 import com.projectmaster.app.workflow.exception.WorkflowValidationException;
@@ -33,6 +36,13 @@ public class WorkflowStateValidator {
             case RESUME_STAGE:
                 validateResumeStage(context);
                 break;
+            case ACCEPT_ASSIGNMENT:
+                validateAcceptAssignment(context);
+                break;
+            case DECLINE_ASSIGNMENT:
+                validateDeclineAssignment(context);
+                break;
+
             default:
                 log.debug("No specific validation for action type: {}", actionType);
         }
@@ -104,4 +114,30 @@ public class WorkflowStateValidator {
                 String.format("Cannot resume stage with status: %s", currentStatus));
         }
     }
+    
+    private void validateAcceptAssignment(WorkflowExecutionContext context) {
+        if (context.getProjectStepAssignment() == null) {
+            throw new WorkflowValidationException("Project step assignment is required to accept assignment");
+        }
+        
+        AssignmentStatus currentStatus = context.getProjectStepAssignment().getStatus();
+        if (currentStatus != AssignmentStatus.PENDING) {
+            throw new WorkflowValidationException(
+                String.format("Cannot accept assignment with status: %s", currentStatus));
+        }
+    }
+    
+    private void validateDeclineAssignment(WorkflowExecutionContext context) {
+        if (context.getProjectStepAssignment() == null) {
+            throw new WorkflowValidationException("Project step assignment is required to decline assignment");
+        }
+        
+        AssignmentStatus currentStatus = context.getProjectStepAssignment().getStatus();
+        if (currentStatus != AssignmentStatus.PENDING) {
+            throw new WorkflowValidationException(
+                String.format("Cannot decline assignment with status: %s", currentStatus));
+        }
+    }
+    
+
 }

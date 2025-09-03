@@ -1,7 +1,7 @@
 package com.projectmaster.app.workflow.entity;
 
 import com.projectmaster.app.common.entity.BaseEntity;
-import com.projectmaster.app.user.entity.Company;
+import com.projectmaster.app.company.entity.Company;
 import jakarta.persistence.*;
 import lombok.*;
 

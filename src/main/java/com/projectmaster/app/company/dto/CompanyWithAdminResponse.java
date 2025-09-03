@@ -1,5 +1,6 @@
-package com.projectmaster.app.user.dto;
+package com.projectmaster.app.company.dto;
 
+import com.projectmaster.app.user.dto.UserDto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

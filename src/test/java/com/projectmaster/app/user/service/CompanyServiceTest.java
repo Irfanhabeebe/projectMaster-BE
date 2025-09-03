@@ -2,9 +2,10 @@ package com.projectmaster.app.user.service;
 
 import com.projectmaster.app.common.exception.EntityNotFoundException;
 import com.projectmaster.app.common.exception.ProjectMasterException;
-import com.projectmaster.app.user.dto.CompanyDto;
-import com.projectmaster.app.user.entity.Company;
-import com.projectmaster.app.user.repository.CompanyRepository;
+import com.projectmaster.app.company.dto.CompanyDto;
+import com.projectmaster.app.company.entity.Company;
+import com.projectmaster.app.company.repository.CompanyRepository;
+import com.projectmaster.app.company.service.CompanyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

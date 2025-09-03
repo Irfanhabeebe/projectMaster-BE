@@ -1,6 +1,6 @@
-package com.projectmaster.app.user.repository;
+package com.projectmaster.app.company.repository;
 
-import com.projectmaster.app.user.entity.Company;
+import com.projectmaster.app.company.entity.Company;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

@@ -2,6 +2,7 @@ package com.projectmaster.app.user.entity;
 
 import com.projectmaster.app.common.entity.BaseEntity;
 import com.projectmaster.app.common.enums.UserRole;
+import com.projectmaster.app.company.entity.Company;
 import com.projectmaster.app.contractor.entity.ContractingCompany;
 import jakarta.persistence.*;
 import lombok.*;

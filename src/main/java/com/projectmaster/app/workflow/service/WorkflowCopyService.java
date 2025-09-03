@@ -1,6 +1,6 @@
 package com.projectmaster.app.workflow.service;
 
-import com.projectmaster.app.user.entity.Company;
+import com.projectmaster.app.company.entity.Company;
 import com.projectmaster.app.workflow.entity.*;
 import com.projectmaster.app.workflow.repository.*;
 import lombok.RequiredArgsConstructor;

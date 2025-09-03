@@ -35,7 +35,7 @@ public class ProjectStep extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Builder.Default
     @Column(name = "status", nullable = false)
-    private StageStatus status = StageStatus.NOT_STARTED;
+    private StepExecutionStatus status = StepExecutionStatus.NOT_STARTED;
 
     @Column(name = "start_date")
     private LocalDate startDate;
@@ -82,4 +82,15 @@ public class ProjectStep extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "specialty_id", nullable = false)
     private Specialty specialty;
+    
+    /**
+     * Step execution status - tracks the actual work progress
+     */
+    public enum StepExecutionStatus {
+        NOT_STARTED,    // Step hasn't begun
+        IN_PROGRESS,    // Work actively happening
+        ON_HOLD,        // Step paused temporarily
+        COMPLETED,      // Step finished successfully
+        CANCELLED       // Step cancelled
+    }
 }

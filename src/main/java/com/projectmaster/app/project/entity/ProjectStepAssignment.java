@@ -1,7 +1,8 @@
-package com.projectmaster.app.contractor.entity;
+package com.projectmaster.app.project.entity;
 
 import com.projectmaster.app.common.entity.BaseEntity;
-import com.projectmaster.app.project.entity.ProjectStep;
+import com.projectmaster.app.contractor.entity.ContractingCompany;
+import com.projectmaster.app.crew.entity.Crew;
 import com.projectmaster.app.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -21,8 +22,17 @@ public class ProjectStepAssignment extends BaseEntity {
     @JoinColumn(name = "project_step_id", nullable = false)
     private ProjectStep projectStep;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "assigned_to_type", nullable = false)
+    private AssignmentType assignedToType;
+    
+    // Only one of these will be populated based on assignedToType
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "contracting_company_id", nullable = false)
+    @JoinColumn(name = "crew_id")
+    private Crew crew;
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "contracting_company_id")
     private ContractingCompany contractingCompany;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -61,18 +71,30 @@ public class ProjectStepAssignment extends BaseEntity {
     @Column(name = "hourly_rate")
     private java.math.BigDecimal hourlyRate;
 
+    @Column(name = "estimated_hours")
+    private Integer estimatedHours;
+
     @Column(name = "total_hours")
     private Integer totalHours;
 
     @Column(name = "total_cost")
     private java.math.BigDecimal totalCost;
 
+    /**
+     * Assignment type - defines who is assigned to the step
+     */
+    public enum AssignmentType {
+        CREW,               // Assigned to internal crew member
+        CONTRACTING_COMPANY // Assigned to external contractor
+    }
+    
+    /**
+     * Assignment status - tracks the assignment acceptance and management
+     */
     public enum AssignmentStatus {
-        PENDING,        // Step assigned, waiting for contractor response
-        ACCEPTED,       // Contractor accepted the assignment
-        DECLINED,       // Contractor declined the assignment
-        IN_PROGRESS,    // Work has started
-        COMPLETED,      // Work completed
+        PENDING,        // Step assigned, waiting for response
+        ACCEPTED,       // Assignment accepted
+        DECLINED,       // Assignment declined
         CANCELLED       // Assignment cancelled
     }
 }

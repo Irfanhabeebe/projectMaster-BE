@@ -55,6 +55,11 @@ public class TaskManagementService {
             throw new ProjectMasterException("Cannot assign task to user from different company");
         }
 
+        // Validate assignedBy user belongs to the same company as the project
+        if (!assignedBy.getCompany().getId().equals(task.getProjectStep().getProjectTask().getProjectStage().getProject().getCompany().getId())) {
+            throw new ProjectMasterException("Cannot assign task from different company");
+        }
+
         String oldAssignee = task.getAssignedTo() != null ? task.getAssignedTo().getFirstName() + " " + task.getAssignedTo().getLastName() : null;
         String newAssignee = assignee.getFirstName() + " " + assignee.getLastName();
 
@@ -88,6 +93,11 @@ public class TaskManagementService {
         User unassignedBy = userRepository.findById(unassignedById)
                 .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + unassignedById));
 
+        // Validate unassignedBy user belongs to the same company as the project
+        if (!unassignedBy.getCompany().getId().equals(task.getProjectStep().getProjectTask().getProjectStage().getProject().getCompany().getId())) {
+            throw new ProjectMasterException("Cannot unassign task from different company");
+        }
+
         if (task.getAssignedTo() == null) {
             throw new ProjectMasterException("Task is not assigned to anyone");
         }
@@ -117,6 +127,11 @@ public class TaskManagementService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + userId));
+
+        // Validate user belongs to the same company as the project
+        if (!user.getCompany().getId().equals(task.getProjectStep().getProjectTask().getProjectStage().getProject().getCompany().getId())) {
+            throw new ProjectMasterException("Cannot start time tracking from different company");
+        }
 
         // Check if user already has an active time entry for this task
         if (timeEntryRepository.findByTaskIdAndUserIdAndEndTimeIsNull(request.getTaskId(), userId).isPresent()) {
@@ -153,11 +168,16 @@ public class TaskManagementService {
         TaskTimeEntry timeEntry = timeEntryRepository.findByTaskIdAndUserIdAndEndTimeIsNull(taskId, userId)
                 .orElseThrow(() -> new EntityNotFoundException("No active time entry found for this task and user"));
 
+        // Validate user belongs to the same company as the project
+        Task task = timeEntry.getTask();
+        if (!timeEntry.getUser().getCompany().getId().equals(task.getProjectStep().getProjectTask().getProjectStage().getProject().getCompany().getId())) {
+            throw new ProjectMasterException("Cannot stop time tracking from different company");
+        }
+
         timeEntry.stopTimer();
         TaskTimeEntry savedEntry = timeEntryRepository.save(timeEntry);
 
         // Update task's actual hours
-        Task task = timeEntry.getTask();
         Integer totalMinutes = timeEntryRepository.sumDurationMinutesByTaskId(taskId);
         task.setActualHours((int) Math.ceil(totalMinutes / 60.0));
         task.setLastActivityAt(Instant.now());
@@ -183,6 +203,11 @@ public class TaskManagementService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + userId));
+
+        // Validate user belongs to the same company as the project
+        if (!user.getCompany().getId().equals(task.getProjectStep().getProjectTask().getProjectStage().getProject().getCompany().getId())) {
+            throw new ProjectMasterException("Cannot add comment from different company");
+        }
 
         TaskComment comment = TaskComment.builder()
                 .task(task)
@@ -224,6 +249,11 @@ public class TaskManagementService {
         User blockedBy = userRepository.findById(blockedById)
                 .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + blockedById));
 
+        // Validate blockedBy user belongs to the same company as the project
+        if (!blockedBy.getCompany().getId().equals(task.getProjectStep().getProjectTask().getProjectStage().getProject().getCompany().getId())) {
+            throw new ProjectMasterException("Cannot block task from different company");
+        }
+
         task.setBlockedReason(reason);
         task.setLastActivityAt(Instant.now());
 
@@ -255,6 +285,11 @@ public class TaskManagementService {
 
         User unblockedBy = userRepository.findById(unblockedById)
                 .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + unblockedById));
+
+        // Validate unblockedBy user belongs to the same company as the project
+        if (!unblockedBy.getCompany().getId().equals(task.getProjectStep().getProjectTask().getProjectStage().getProject().getCompany().getId())) {
+            throw new ProjectMasterException("Cannot unblock task from different company");
+        }
 
         if (!task.isBlocked()) {
             throw new ProjectMasterException("Task is not blocked");
@@ -292,6 +327,11 @@ public class TaskManagementService {
 
         User updatedBy = userRepository.findById(updatedById)
                 .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + updatedById));
+
+        // Validate updatedBy user belongs to the same company as the project
+        if (!updatedBy.getCompany().getId().equals(task.getProjectStep().getProjectTask().getProjectStage().getProject().getCompany().getId())) {
+            throw new ProjectMasterException("Cannot update task progress from different company");
+        }
 
         Integer oldPercentage = task.getCompletionPercentage();
         task.setCompletionPercentage(completionPercentage);

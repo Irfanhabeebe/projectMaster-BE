@@ -1,0 +1,775 @@
+package com.projectmaster.app.crew.service;
+
+import com.projectmaster.app.common.exception.EntityNotFoundException;
+import com.projectmaster.app.common.exception.ProjectMasterException;
+import com.projectmaster.app.crew.dto.*;
+import com.projectmaster.app.crew.entity.Crew;
+import com.projectmaster.app.crew.repository.CrewRepository;
+import com.projectmaster.app.customer.dto.AddressResponse;
+import com.projectmaster.app.project.entity.ProjectStepAssignment;
+import com.projectmaster.app.project.entity.ProjectStepAssignment.AssignmentStatus;
+import com.projectmaster.app.project.entity.ProjectStep;
+import com.projectmaster.app.project.repository.ProjectStepAssignmentRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+@Transactional(readOnly = true)
+public class CrewDashboardService {
+
+    private final ProjectStepAssignmentRepository assignmentRepository;
+    private final CrewRepository crewRepository;
+
+    /**
+     * Find crew ID by user ID
+     */
+    public UUID findCrewIdByUserId(UUID userId) {
+        log.info("Finding crew ID for user ID: {}", userId);
+        
+        Crew crew = crewRepository.findByUserId(userId)
+                .orElseThrow(() -> new EntityNotFoundException("Crew not found for user id: " + userId));
+        
+        return crew.getId();
+    }
+
+    /**
+     * Search assignments for a crew member by user ID with comprehensive filtering and pagination
+     */
+    public AssignmentSearchResponse searchAssignmentsByUserId(UUID userId, AssignmentSearchRequest searchRequest) {
+        log.info("Searching assignments for user {} with filters: {}", userId, searchRequest);
+        
+        // Find crew ID from user ID
+        UUID crewId = findCrewIdByUserId(userId);
+        
+        // Delegate to the crew ID method
+        return searchAssignments(crewId, searchRequest);
+    }
+
+    /**
+     * Search assignments for a crew member with comprehensive filtering and pagination
+     */
+    public AssignmentSearchResponse searchAssignments(UUID crewId, AssignmentSearchRequest searchRequest) {
+        log.info("Searching assignments for crew member {} with filters: {}", crewId, searchRequest);
+
+        // Validate crew exists
+        crewRepository.findById(crewId)
+                .orElseThrow(() -> new EntityNotFoundException("Crew not found with id: " + crewId));
+
+        // Build pagination
+        int page = searchRequest.getPage() != null ? searchRequest.getPage() : searchRequest.getPageDefault();
+        int size = searchRequest.getSize() != null ? searchRequest.getSize() : searchRequest.getSizeDefault();
+        String sortBy = searchRequest.getSortBy() != null ? searchRequest.getSortBy() : searchRequest.getSortByDefault();
+        String sortDirection = searchRequest.getSortDirection() != null ? searchRequest.getSortDirection() : searchRequest.getSortDirectionDefault();
+
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        // Get all assignments for the crew (we'll filter in memory for now)
+        // In a real implementation, you'd want to add these filters to the repository query
+        List<ProjectStepAssignment> allAssignments = assignmentRepository.findByCrewId(crewId);
+        
+        // Apply filters
+        List<ProjectStepAssignment> filteredAssignments = allAssignments.stream()
+                .filter(assignment -> applyFilters(assignment, searchRequest))
+                .collect(java.util.stream.Collectors.toList());
+
+        // Apply pagination manually (in real implementation, use repository pagination)
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), filteredAssignments.size());
+        List<ProjectStepAssignment> pagedAssignments = filteredAssignments.subList(start, end);
+
+        // Map to DTOs
+        List<CrewAssignmentDto> assignmentDtos = pagedAssignments.stream()
+                .map(this::mapToCrewAssignmentDto)
+                .collect(java.util.stream.Collectors.toList());
+
+        // Build pagination info
+        AssignmentSearchResponse.PaginationInfo paginationInfo = AssignmentSearchResponse.PaginationInfo.builder()
+                .currentPage(page)
+                .pageSize(size)
+                .totalElements(filteredAssignments.size())
+                .totalPages((int) Math.ceil((double) filteredAssignments.size() / size))
+                .first(page == 0)
+                .last(page >= (int) Math.ceil((double) filteredAssignments.size() / size) - 1)
+                .numberOfElements(assignmentDtos.size())
+                .build();
+
+        // Build summary statistics
+        AssignmentSearchResponse.SearchSummary summary = buildSearchSummary(filteredAssignments);
+
+        return AssignmentSearchResponse.builder()
+                .assignments(assignmentDtos)
+                .pagination(paginationInfo)
+                .summary(summary)
+                .build();
+    }
+
+    /**
+     * Get all assignments for a crew member with comprehensive project context
+     * @deprecated Use searchAssignments instead
+     */
+    @Deprecated
+    public List<CrewAssignmentDto> getCrewAssignments(UUID crewId) {
+        log.info("Fetching assignments for crew member: {}", crewId);
+
+        // Validate crew exists
+        crewRepository.findById(crewId)
+                .orElseThrow(() -> new EntityNotFoundException("Crew not found with id: " + crewId));
+
+        // Get all assignments for this crew
+        List<ProjectStepAssignment> assignments = assignmentRepository.findByCrewId(crewId);
+        
+        log.info("Found {} assignments for crew member: {}", assignments.size(), crewId);
+
+        return assignments.stream()
+                .map(this::mapToCrewAssignmentDto)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Get assignments for a crew member filtered by status
+     */
+    public List<CrewAssignmentDto> getCrewAssignmentsByStatus(UUID crewId, AssignmentStatus status) {
+        log.info("Fetching assignments with status {} for crew member: {}", status, crewId);
+
+        // Validate crew exists
+        crewRepository.findById(crewId)
+                .orElseThrow(() -> new EntityNotFoundException("Crew not found with id: " + crewId));
+
+        // Get assignments filtered by status
+        List<ProjectStepAssignment> assignments = assignmentRepository.findByCrewIdAndStatus(crewId, status);
+        
+        log.info("Found {} assignments with status {} for crew member: {}", assignments.size(), status, crewId);
+
+        return assignments.stream()
+                .map(this::mapToCrewAssignmentDto)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Get pending assignments for a crew member (for acceptance workflow)
+     */
+    public List<CrewAssignmentDto> getPendingAssignments(UUID crewId) {
+        return getCrewAssignmentsByStatus(crewId, AssignmentStatus.PENDING);
+    }
+
+    /**
+     * Get active assignments for a crew member (accepted assignments)
+     */
+    public List<CrewAssignmentDto> getActiveAssignments(UUID crewId) {
+        return getCrewAssignmentsByStatus(crewId, AssignmentStatus.ACCEPTED);
+    }
+
+    /**
+     * Get assignment statistics for a crew member
+     */
+    public CrewAssignmentStats getAssignmentStats(UUID crewId) {
+        log.info("Fetching assignment statistics for crew member: {}", crewId);
+
+        // Validate crew exists
+        crewRepository.findById(crewId)
+                .orElseThrow(() -> new EntityNotFoundException("Crew not found with id: " + crewId));
+
+        long totalAssignments = assignmentRepository.findByCrewId(crewId).size();
+        long pendingAssignments = assignmentRepository.countByCrewIdAndStatus(crewId, AssignmentStatus.PENDING);
+        long acceptedAssignments = assignmentRepository.countByCrewIdAndStatus(crewId, AssignmentStatus.ACCEPTED);
+        long declinedAssignments = assignmentRepository.countByCrewIdAndStatus(crewId, AssignmentStatus.DECLINED);
+
+        return CrewAssignmentStats.builder()
+                .totalAssignments(totalAssignments)
+                .pendingAssignments(pendingAssignments)
+                .acceptedAssignments(acceptedAssignments)
+                .declinedAssignments(declinedAssignments)
+                .build();
+    }
+
+    /**
+     * Map ProjectStepAssignment entity to CrewAssignmentDto with full project context
+     */
+    private CrewAssignmentDto mapToCrewAssignmentDto(ProjectStepAssignment assignment) {
+        ProjectStep step = assignment.getProjectStep();
+        
+        // Get project context through the step's relationships
+        var project = step.getProjectTask().getProjectStage().getProject();
+        var stage = step.getProjectTask().getProjectStage();
+        var task = step.getProjectTask();
+        
+        // Map address if present
+        AddressResponse addressResponse = null;
+        if (project.getAddress() != null) {
+            addressResponse = AddressResponse.builder()
+                    .id(project.getAddress().getId())
+                    .line1(project.getAddress().getLine1())
+                    .line2(project.getAddress().getLine2())
+                    .suburbCity(project.getAddress().getSuburbCity())
+                    .stateProvince(project.getAddress().getStateProvince())
+                    .postcode(project.getAddress().getPostcode())
+                    .country(project.getAddress().getCountry())
+                    .dpid(project.getAddress().getDpid())
+                    .latitude(project.getAddress().getLatitude())
+                    .longitude(project.getAddress().getLongitude())
+                    .validated(project.getAddress().getValidated())
+                    .validationSource(project.getAddress().getValidationSource())
+                    .createdAt(project.getAddress().getCreatedAt())
+                    .updatedAt(project.getAddress().getUpdatedAt())
+                    .build();
+        }
+
+        // Calculate computed fields
+        boolean isOverdue = calculateIsOverdue(step);
+        boolean canStart = canStartStep(assignment, step);
+        boolean canComplete = canCompleteStep(assignment, step);
+        long daysUntilDue = calculateDaysUntilDue(step);
+        int progressPercentage = calculateProgressPercentage(step);
+
+        return CrewAssignmentDto.builder()
+                // Assignment details
+                .assignmentId(assignment.getId())
+                .assignedToType(assignment.getAssignedToType())
+                .assignmentStatus(assignment.getStatus())
+                .assignedDate(assignment.getAssignedDate())
+                .acceptedDate(assignment.getAcceptedDate())
+                .assignmentNotes(assignment.getNotes())
+                .hourlyRate(assignment.getHourlyRate())
+                .estimatedHours(assignment.getEstimatedHours())
+                
+                // Project context
+                .projectId(project.getId())
+                .projectNumber(project.getProjectNumber())
+                .projectName(project.getName())
+                .projectDescription(project.getDescription())
+                .projectAddress(addressResponse)
+                .customerName(project.getCustomer().getFirstName() + " " + project.getCustomer().getLastName())
+                .companyName(project.getCompany().getName())
+                
+                // Stage context
+                .stageId(stage.getId())
+                .stageName(stage.getName())
+                .stageStatus(stage.getStatus().name())
+                
+                // Task context
+                .taskId(task.getId())
+                .taskName(task.getName())
+                .taskStatus(task.getStatus().name())
+                
+                // Step details
+                .stepId(step.getId())
+                .stepName(step.getName())
+                .stepDescription(step.getDescription())
+                .stepStatus(step.getStatus())
+                .stepOrderIndex(step.getOrderIndex())
+                .stepEstimatedHours(step.getEstimatedHours())
+                .stepStartDate(step.getStartDate())
+                .stepEndDate(step.getEndDate())
+                .stepActualStartDate(step.getActualStartDate())
+                .stepActualEndDate(step.getActualEndDate())
+                .stepNotes(step.getNotes())
+                .qualityCheckPassed(step.getQualityCheckPassed())
+                .requiredSkills(step.getRequiredSkills())
+                .requirements(step.getRequirements())
+                .specialtyName(step.getSpecialty() != null ? step.getSpecialty().getSpecialtyName() : null)
+                
+                // Assignment metadata
+                .assignedByUserId(assignment.getAssignedByUser().getId())
+                .assignedByUserName(assignment.getAssignedByUser().getFirstName() + " " + assignment.getAssignedByUser().getLastName())
+                
+                // Work details
+                .workStartDate(assignment.getStartDate())
+                .estimatedCompletionDate(assignment.getEstimatedCompletionDate())
+                .actualCompletionDate(assignment.getActualCompletionDate())
+                .totalHours(assignment.getTotalHours())
+                .totalCost(assignment.getTotalCost())
+                
+                // Computed fields
+                .isOverdue(isOverdue)
+                .canStart(canStart)
+                .canComplete(canComplete)
+                .daysUntilDue(daysUntilDue)
+                .progressPercentage(progressPercentage)
+                .build();
+    }
+
+    /**
+     * Calculate if a step is overdue
+     */
+    private boolean calculateIsOverdue(ProjectStep step) {
+        if (step.getEndDate() == null || step.getStatus() == ProjectStep.StepExecutionStatus.COMPLETED) {
+            return false;
+        }
+        return LocalDate.now().isAfter(step.getEndDate());
+    }
+
+    /**
+     * Determine if a step can be started
+     */
+    private boolean canStartStep(ProjectStepAssignment assignment, ProjectStep step) {
+        return assignment.getStatus() == AssignmentStatus.ACCEPTED && 
+               step.getStatus() == ProjectStep.StepExecutionStatus.NOT_STARTED;
+    }
+
+    /**
+     * Determine if a step can be completed
+     */
+    private boolean canCompleteStep(ProjectStepAssignment assignment, ProjectStep step) {
+        return assignment.getStatus() == AssignmentStatus.ACCEPTED && 
+               step.getStatus() == ProjectStep.StepExecutionStatus.IN_PROGRESS;
+    }
+
+    /**
+     * Calculate days until due date
+     */
+    private long calculateDaysUntilDue(ProjectStep step) {
+        if (step.getEndDate() == null) {
+            return 0;
+        }
+        return ChronoUnit.DAYS.between(LocalDate.now(), step.getEndDate());
+    }
+
+    /**
+     * Calculate progress percentage based on step status
+     */
+    private int calculateProgressPercentage(ProjectStep step) {
+        return switch (step.getStatus()) {
+            case NOT_STARTED -> 0;
+            case IN_PROGRESS -> 50; // Default progress for in-progress steps
+            case COMPLETED -> 100;
+            case ON_HOLD -> 25; // Some progress made before being put on hold
+            case CANCELLED -> 0;
+        };
+    }
+
+
+
+    /**
+     * Accept a project step assignment
+     */
+    @Transactional
+    public CrewAssignmentDto acceptAssignment(UUID assignmentId, AcceptAssignmentRequest request, UUID crewId) {
+        log.info("Accepting assignment {} by crew member {}", assignmentId, crewId);
+
+        // Find the assignment
+        ProjectStepAssignment assignment = assignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new EntityNotFoundException("Assignment not found with id: " + assignmentId));
+
+        // Validate that the assignment belongs to the crew member
+        if (assignment.getCrew() == null || !assignment.getCrew().getId().equals(crewId)) {
+            throw new ProjectMasterException("Assignment does not belong to this crew member");
+        }
+
+        // Validate assignment status
+        if (assignment.getStatus() != AssignmentStatus.PENDING) {
+            throw new ProjectMasterException("Assignment is not in PENDING status and cannot be accepted");
+        }
+
+        // Update assignment status
+        assignment.setStatus(AssignmentStatus.ACCEPTED);
+        assignment.setAcceptedDate(java.time.LocalDateTime.now());
+        
+        if (request.getNotes() != null) {
+            assignment.setNotes(request.getNotes());
+        }
+        if (request.getExpectedStartDate() != null) {
+            assignment.setStartDate(request.getExpectedStartDate());
+        }
+        if (request.getEstimatedCompletionDate() != null) {
+            assignment.setEstimatedCompletionDate(request.getEstimatedCompletionDate());
+        }
+
+        ProjectStepAssignment savedAssignment = assignmentRepository.save(assignment);
+        log.info("Assignment {} accepted successfully by crew member {}", assignmentId, crewId);
+
+        return mapToCrewAssignmentDto(savedAssignment);
+    }
+
+    /**
+     * Decline a project step assignment by user ID
+     */
+    @Transactional
+    public CrewAssignmentDto declineAssignmentByUserId(UUID assignmentId, DeclineAssignmentRequest request, UUID userId) {
+        log.info("Declining assignment {} by user {}", assignmentId, userId);
+        
+        // Find crew ID from user ID
+        UUID crewId = findCrewIdByUserId(userId);
+        
+        // Delegate to the crew ID method
+        return declineAssignment(assignmentId, request, crewId);
+    }
+
+    /**
+     * Decline a project step assignment
+     */
+    @Transactional
+    public CrewAssignmentDto declineAssignment(UUID assignmentId, DeclineAssignmentRequest request, UUID crewId) {
+        log.info("Declining assignment {} by crew member {}", assignmentId, crewId);
+
+        // Find the assignment
+        ProjectStepAssignment assignment = assignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new EntityNotFoundException("Assignment not found with id: " + assignmentId));
+
+        // Validate that the assignment belongs to the crew member
+        if (assignment.getCrew() == null || !assignment.getCrew().getId().equals(crewId)) {
+            throw new ProjectMasterException("Assignment does not belong to this crew member");
+        }
+
+        // Validate assignment status
+        if (assignment.getStatus() != AssignmentStatus.PENDING) {
+            throw new ProjectMasterException("Assignment is not in PENDING status and cannot be declined");
+        }
+
+        // Update assignment status
+        assignment.setStatus(AssignmentStatus.DECLINED);
+        assignment.setDeclinedDate(java.time.LocalDateTime.now());
+        assignment.setDeclineReason(request.getDeclineReason());
+        
+        if (request.getNotes() != null) {
+            assignment.setNotes(request.getNotes());
+        }
+
+        ProjectStepAssignment savedAssignment = assignmentRepository.save(assignment);
+        log.info("Assignment {} declined successfully by crew member {}", assignmentId, crewId);
+
+        return mapToCrewAssignmentDto(savedAssignment);
+    }
+
+    /**
+     * Start work on an accepted assignment by user ID
+     */
+    @Transactional
+    public CrewAssignmentDto startWorkByUserId(UUID assignmentId, StartWorkRequest request, UUID userId) {
+        log.info("Starting work on assignment {} by user {}", assignmentId, userId);
+        
+        // Find crew ID from user ID
+        UUID crewId = findCrewIdByUserId(userId);
+        
+        // Delegate to the crew ID method
+        return startWork(assignmentId, request, crewId);
+    }
+
+    /**
+     * Start work on an accepted assignment
+     */
+    @Transactional
+    public CrewAssignmentDto startWork(UUID assignmentId, StartWorkRequest request, UUID crewId) {
+        log.info("Starting work on assignment {} by crew member {}", assignmentId, crewId);
+
+        // Find the assignment
+        ProjectStepAssignment assignment = assignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new EntityNotFoundException("Assignment not found with id: " + assignmentId));
+
+        // Validate that the assignment belongs to the crew member
+        if (assignment.getCrew() == null || !assignment.getCrew().getId().equals(crewId)) {
+            throw new ProjectMasterException("Assignment does not belong to this crew member");
+        }
+
+        // Validate assignment status
+        if (assignment.getStatus() != AssignmentStatus.ACCEPTED) {
+            throw new ProjectMasterException("Assignment must be ACCEPTED before work can be started");
+        }
+
+        // Get the project step
+        ProjectStep step = assignment.getProjectStep();
+        
+        // Validate step status
+        if (step.getStatus() != ProjectStep.StepExecutionStatus.NOT_STARTED) {
+            throw new ProjectMasterException("Step is not in NOT_STARTED status and cannot be started");
+        }
+
+        // Update step status to IN_PROGRESS
+        step.setStatus(ProjectStep.StepExecutionStatus.IN_PROGRESS);
+        step.setActualStartDate(java.time.LocalDate.now());
+        
+        if (request.getNotes() != null) {
+            step.setNotes(request.getNotes());
+        }
+
+        // Update assignment work start date
+        assignment.setStartDate(request.getActualStartTime() != null ? 
+                request.getActualStartTime() : java.time.LocalDateTime.now());
+
+        // Save both entities
+        assignmentRepository.save(assignment);
+        log.info("Work started successfully on assignment {} by crew member {}", assignmentId, crewId);
+
+        return mapToCrewAssignmentDto(assignment);
+    }
+
+    /**
+     * Complete work on an assignment by user ID
+     */
+    @Transactional
+    public CrewAssignmentDto completeWorkByUserId(UUID assignmentId, CompleteWorkRequest request, UUID userId) {
+        log.info("Completing work on assignment {} by user {}", assignmentId, userId);
+        
+        // Find crew ID from user ID
+        UUID crewId = findCrewIdByUserId(userId);
+        
+        // Delegate to the crew ID method
+        return completeWork(assignmentId, request, crewId);
+    }
+
+    /**
+     * Complete work on an assignment
+     */
+    @Transactional
+    public CrewAssignmentDto completeWork(UUID assignmentId, CompleteWorkRequest request, UUID crewId) {
+        log.info("Completing work on assignment {} by crew member {}", assignmentId, crewId);
+
+        // Find the assignment
+        ProjectStepAssignment assignment = assignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new EntityNotFoundException("Assignment not found with id: " + assignmentId));
+
+        // Validate that the assignment belongs to the crew member
+        if (assignment.getCrew() == null || !assignment.getCrew().getId().equals(crewId)) {
+            throw new ProjectMasterException("Assignment does not belong to this crew member");
+        }
+
+        // Validate assignment status
+        if (assignment.getStatus() != AssignmentStatus.ACCEPTED) {
+            throw new ProjectMasterException("Assignment must be ACCEPTED before work can be completed");
+        }
+
+        // Get the project step
+        ProjectStep step = assignment.getProjectStep();
+        
+        // Validate step status
+        if (step.getStatus() != ProjectStep.StepExecutionStatus.IN_PROGRESS) {
+            throw new ProjectMasterException("Step is not in IN_PROGRESS status and cannot be completed");
+        }
+
+        // Update step status to COMPLETED
+        step.setStatus(ProjectStep.StepExecutionStatus.COMPLETED);
+        step.setActualEndDate(java.time.LocalDate.now());
+        
+        if (request.getNotes() != null) {
+            step.setNotes(request.getNotes());
+        }
+        if (request.getQualityCheckPassed() != null) {
+            step.setQualityCheckPassed(request.getQualityCheckPassed());
+        }
+
+        // Update assignment completion details
+        assignment.setActualCompletionDate(request.getActualCompletionTime() != null ? 
+                request.getActualCompletionTime() : java.time.LocalDateTime.now());
+        
+        if (request.getTotalHoursWorked() != null) {
+            assignment.setTotalHours(request.getTotalHoursWorked());
+            // Calculate total cost if hourly rate is set
+            if (assignment.getHourlyRate() != null) {
+                assignment.setTotalCost(assignment.getHourlyRate().multiply(
+                        java.math.BigDecimal.valueOf(request.getTotalHoursWorked())));
+            }
+        }
+
+        // Save both entities
+        assignmentRepository.save(assignment);
+        log.info("Work completed successfully on assignment {} by crew member {}", assignmentId, crewId);
+
+        return mapToCrewAssignmentDto(assignment);
+    }
+
+    /**
+     * Get a specific assignment by ID for a user
+     */
+    public CrewAssignmentDto getAssignmentByIdByUserId(UUID assignmentId, UUID userId) {
+        log.info("Fetching assignment {} for user {}", assignmentId, userId);
+        
+        // Find crew ID from user ID
+        UUID crewId = findCrewIdByUserId(userId);
+        
+        // Delegate to the crew ID method
+        return getAssignmentById(assignmentId, crewId);
+    }
+
+    /**
+     * Get a specific assignment by ID for a crew member
+     */
+    public CrewAssignmentDto getAssignmentById(UUID assignmentId, UUID crewId) {
+        log.info("Fetching assignment {} for crew member {}", assignmentId, crewId);
+
+        ProjectStepAssignment assignment = assignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new EntityNotFoundException("Assignment not found with id: " + assignmentId));
+
+        // Validate that the assignment belongs to the crew member
+        if (assignment.getCrew() == null || !assignment.getCrew().getId().equals(crewId)) {
+            throw new ProjectMasterException("Assignment does not belong to this crew member");
+        }
+
+        return mapToCrewAssignmentDto(assignment);
+    }
+
+    /**
+     * Apply filters to an assignment based on search criteria
+     */
+    private boolean applyFilters(ProjectStepAssignment assignment, AssignmentSearchRequest searchRequest) {
+        // Status filter
+        if (searchRequest.getStatus() != null && assignment.getStatus() != searchRequest.getStatus()) {
+            return false;
+        }
+        
+        // Multiple statuses filter
+        if (searchRequest.getStatuses() != null && !searchRequest.getStatuses().isEmpty() 
+            && !searchRequest.getStatuses().contains(assignment.getStatus())) {
+            return false;
+        }
+
+        // Project name filter
+        if (searchRequest.getProjectName() != null && !searchRequest.getProjectName().trim().isEmpty()) {
+            String projectName = assignment.getProjectStep().getProjectTask().getProjectStage().getProject().getName();
+            if (!projectName.toLowerCase().contains(searchRequest.getProjectName().toLowerCase())) {
+                return false;
+            }
+        }
+
+        // Stage name filter
+        if (searchRequest.getStageName() != null && !searchRequest.getStageName().trim().isEmpty()) {
+            String stageName = assignment.getProjectStep().getProjectTask().getProjectStage().getName();
+            if (!stageName.toLowerCase().contains(searchRequest.getStageName().toLowerCase())) {
+                return false;
+            }
+        }
+
+        // Task name filter
+        if (searchRequest.getTaskName() != null && !searchRequest.getTaskName().trim().isEmpty()) {
+            String taskName = assignment.getProjectStep().getProjectTask().getName();
+            if (!taskName.toLowerCase().contains(searchRequest.getTaskName().toLowerCase())) {
+                return false;
+            }
+        }
+
+        // Step name filter
+        if (searchRequest.getStepName() != null && !searchRequest.getStepName().trim().isEmpty()) {
+            String stepName = assignment.getProjectStep().getName();
+            if (!stepName.toLowerCase().contains(searchRequest.getStepName().toLowerCase())) {
+                return false;
+            }
+        }
+
+        // Specialty name filter
+        if (searchRequest.getSpecialtyName() != null && !searchRequest.getSpecialtyName().trim().isEmpty()) {
+            if (assignment.getProjectStep().getSpecialty() == null || 
+                !assignment.getProjectStep().getSpecialty().getSpecialtyName().toLowerCase()
+                    .contains(searchRequest.getSpecialtyName().toLowerCase())) {
+                return false;
+            }
+        }
+
+        // Assignment type filter
+        if (searchRequest.getAssignmentType() != null && !searchRequest.getAssignmentType().trim().isEmpty()) {
+            if (!assignment.getAssignedToType().toString().equalsIgnoreCase(searchRequest.getAssignmentType())) {
+                return false;
+            }
+        }
+
+        // Due date filters - using estimated completion date as due date
+        if (searchRequest.getDueDateFrom() != null && assignment.getEstimatedCompletionDate() != null) {
+            if (assignment.getEstimatedCompletionDate().toLocalDate().isBefore(searchRequest.getDueDateFrom())) {
+                return false;
+            }
+        }
+        
+        if (searchRequest.getDueDateTo() != null && assignment.getEstimatedCompletionDate() != null) {
+            if (assignment.getEstimatedCompletionDate().toLocalDate().isAfter(searchRequest.getDueDateTo())) {
+                return false;
+            }
+        }
+
+        // Overdue filter - using estimated completion date
+        if (searchRequest.getOverdueOnly() != null && searchRequest.getOverdueOnly()) {
+            if (assignment.getEstimatedCompletionDate() == null || 
+                !assignment.getEstimatedCompletionDate().toLocalDate().isBefore(java.time.LocalDate.now())) {
+                return false;
+            }
+        }
+
+        // Can start filter
+        if (searchRequest.getCanStart() != null && searchRequest.getCanStart()) {
+            if (assignment.getStatus() != AssignmentStatus.ACCEPTED || 
+                assignment.getProjectStep().getStatus() != ProjectStep.StepExecutionStatus.NOT_STARTED) {
+                return false;
+            }
+        }
+
+        // Can complete filter
+        if (searchRequest.getCanComplete() != null && searchRequest.getCanComplete()) {
+            if (assignment.getStatus() != AssignmentStatus.ACCEPTED || 
+                assignment.getProjectStep().getStatus() != ProjectStep.StepExecutionStatus.IN_PROGRESS) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Build search summary statistics
+     */
+    private AssignmentSearchResponse.SearchSummary buildSearchSummary(List<ProjectStepAssignment> assignments) {
+        long pendingCount = assignments.stream()
+                .mapToLong(a -> a.getStatus() == AssignmentStatus.PENDING ? 1 : 0)
+                .sum();
+        
+        long acceptedCount = assignments.stream()
+                .mapToLong(a -> a.getStatus() == AssignmentStatus.ACCEPTED ? 1 : 0)
+                .sum();
+        
+        long declinedCount = assignments.stream()
+                .mapToLong(a -> a.getStatus() == AssignmentStatus.DECLINED ? 1 : 0)
+                .sum();
+        
+        long overdueCount = assignments.stream()
+                .mapToLong(a -> a.getEstimatedCompletionDate() != null && 
+                               a.getEstimatedCompletionDate().toLocalDate().isBefore(java.time.LocalDate.now()) ? 1 : 0)
+                .sum();
+        
+        long canStartCount = assignments.stream()
+                .mapToLong(a -> a.getStatus() == AssignmentStatus.ACCEPTED && 
+                               a.getProjectStep().getStatus() == ProjectStep.StepExecutionStatus.NOT_STARTED ? 1 : 0)
+                .sum();
+        
+        long canCompleteCount = assignments.stream()
+                .mapToLong(a -> a.getStatus() == AssignmentStatus.ACCEPTED && 
+                               a.getProjectStep().getStatus() == ProjectStep.StepExecutionStatus.IN_PROGRESS ? 1 : 0)
+                .sum();
+
+        return AssignmentSearchResponse.SearchSummary.builder()
+                .totalFound(assignments.size())
+                .pendingCount(pendingCount)
+                .acceptedCount(acceptedCount)
+                .declinedCount(declinedCount)
+                .overdueCount(overdueCount)
+                .canStartCount(canStartCount)
+                .canCompleteCount(canCompleteCount)
+                .build();
+    }
+
+    /**
+     * Statistics DTO for crew assignments
+     * @deprecated Use AssignmentSearchResponse.SearchSummary instead
+     */
+    @Deprecated
+    @lombok.Data
+    @lombok.Builder
+    @lombok.NoArgsConstructor
+    @lombok.AllArgsConstructor
+    public static class CrewAssignmentStats {
+        private long totalAssignments;
+        private long pendingAssignments;
+        private long acceptedAssignments;
+        private long declinedAssignments;
+    }
+}
