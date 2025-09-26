@@ -59,10 +59,10 @@ public class ProjectWorkflowResponse {
         @Schema(description = "Stage order index")
         private Integer orderIndex;
 
-        @Schema(description = "Stage start date")
+        @Schema(description = "Stage planned start date")
         private LocalDate startDate;
 
-        @Schema(description = "Stage end date")
+        @Schema(description = "Stage planned end date")
         private LocalDate endDate;
 
         @Schema(description = "Stage actual start date")
@@ -82,6 +82,9 @@ public class ProjectWorkflowResponse {
 
         @Schema(description = "List of stage tasks")
         private List<ProjectTaskResponse> tasks;
+
+        @Schema(description = "Dependencies for this stage")
+        private List<DependencyResponse> dependencies;
     }
 
     @Data
@@ -106,13 +109,13 @@ public class ProjectWorkflowResponse {
         @Schema(description = "Task order index")
         private Integer orderIndex;
 
-        @Schema(description = "Estimated hours")
-        private Integer estimatedHours;
+        @Schema(description = "Estimated days")
+        private Integer estimatedDays;
 
-        @Schema(description = "Task start date")
+        @Schema(description = "Task planned start date")
         private LocalDate startDate;
 
-        @Schema(description = "Task end date")
+        @Schema(description = "Task planned end date")
         private LocalDate endDate;
 
         @Schema(description = "Task actual start date")
@@ -135,6 +138,9 @@ public class ProjectWorkflowResponse {
 
         @Schema(description = "List of task steps")
         private List<ProjectStepResponse> steps;
+
+        @Schema(description = "Dependencies for this task")
+        private List<DependencyResponse> dependencies;
     }
 
     @Data
@@ -159,13 +165,13 @@ public class ProjectWorkflowResponse {
         @Schema(description = "Step order index")
         private Integer orderIndex;
 
-        @Schema(description = "Estimated hours")
-        private Integer estimatedHours;
+        @Schema(description = "Estimated days")
+        private Integer estimatedDays;
 
-        @Schema(description = "Step start date")
+        @Schema(description = "Step planned start date")
         private LocalDate startDate;
 
-        @Schema(description = "Step end date")
+        @Schema(description = "Step planned end date")
         private LocalDate endDate;
 
         @Schema(description = "Step actual start date")
@@ -191,6 +197,9 @@ public class ProjectWorkflowResponse {
 
         @Schema(description = "Step assignments")
         private List<ProjectStepAssignmentResponse> assignments;
+
+        @Schema(description = "Dependencies for this step")
+        private List<DependencyResponse> dependencies;
     }
 
     @Data

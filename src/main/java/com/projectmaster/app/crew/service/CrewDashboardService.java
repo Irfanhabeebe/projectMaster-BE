@@ -9,7 +9,6 @@ import com.projectmaster.app.project.entity.ProjectStepAssignment;
 import com.projectmaster.app.project.entity.ProjectStepAssignment.AssignmentStatus;
 import com.projectmaster.app.project.entity.ProjectStep;
 import com.projectmaster.app.project.repository.ProjectStepAssignmentRepository;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -78,9 +77,8 @@ public class CrewDashboardService {
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        // Get all assignments for the crew (we'll filter in memory for now)
-        // In a real implementation, you'd want to add these filters to the repository query
-        List<ProjectStepAssignment> allAssignments = assignmentRepository.findByCrewId(crewId);
+        // Get all assignments for the crew ordered by step start date
+        List<ProjectStepAssignment> allAssignments = assignmentRepository.findByCrewIdOrderByStepStartDate(crewId);
         
         // Apply filters
         List<ProjectStepAssignment> filteredAssignments = allAssignments.stream()
@@ -143,7 +141,7 @@ public class CrewDashboardService {
         crewRepository.findById(crewId)
                 .orElseThrow(() -> new EntityNotFoundException("Crew not found with id: " + crewId));
 
-        List<ProjectStepAssignment> assignments = assignmentRepository.findByCrewId(crewId);
+        List<ProjectStepAssignment> assignments = assignmentRepository.findByCrewIdOrderByStepStartDate(crewId);
         return assignments.stream()
                 .map(this::mapToCrewAssignmentDto)
                 .collect(Collectors.toList());
@@ -275,7 +273,7 @@ public class CrewDashboardService {
                 .acceptedDate(assignment.getAcceptedDate())
                 .assignmentNotes(assignment.getNotes())
                 .hourlyRate(assignment.getHourlyRate())
-                .estimatedHours(assignment.getEstimatedHours())
+                .estimatedDays(assignment.getEstimatedDays())
                 
                 // Project context
                 .projectId(project.getId())
@@ -283,7 +281,6 @@ public class CrewDashboardService {
                 .projectName(project.getName())
                 .projectDescription(project.getDescription())
                 .projectAddress(addressResponse)
-                .customerName(project.getCustomer().getFirstName() + " " + project.getCustomer().getLastName())
                 .companyName(project.getCompany().getName())
                 
                 // Stage context
@@ -302,9 +299,9 @@ public class CrewDashboardService {
                 .stepDescription(step.getDescription())
                 .stepStatus(step.getStatus())
                 .stepOrderIndex(step.getOrderIndex())
-                .stepEstimatedHours(step.getEstimatedHours())
-                .stepStartDate(step.getStartDate())
-                .stepEndDate(step.getEndDate())
+                .stepEstimatedDays(step.getEstimatedDays())
+                .stepStartDate(step.getPlannedStartDate())
+                .stepEndDate(step.getPlannedEndDate())
                 .stepActualStartDate(step.getActualStartDate())
                 .stepActualEndDate(step.getActualEndDate())
                 .stepNotes(step.getNotes())
@@ -318,7 +315,7 @@ public class CrewDashboardService {
                 .assignedByUserName(assignment.getAssignedByUser().getFirstName() + " " + assignment.getAssignedByUser().getLastName())
                 
                 // Work details
-                .workStartDate(assignment.getStartDate())
+                .workStartDate(assignment.getPlannedStartDate())
                 .estimatedCompletionDate(assignment.getEstimatedCompletionDate())
                 .actualCompletionDate(assignment.getActualCompletionDate())
                 .totalHours(assignment.getTotalHours())
@@ -337,10 +334,10 @@ public class CrewDashboardService {
      * Calculate if a step is overdue
      */
     private boolean calculateIsOverdue(ProjectStep step) {
-        if (step.getEndDate() == null) {
+        if (step.getPlannedEndDate() == null) {
             return false;
         }
-        return step.getEndDate().isBefore(LocalDate.now()) && 
+        return step.getPlannedEndDate().isBefore(LocalDate.now()) && 
                step.getStatus() != ProjectStep.StepExecutionStatus.COMPLETED;
     }
 
@@ -364,10 +361,10 @@ public class CrewDashboardService {
      * Calculate days until due date
      */
     private long calculateDaysUntilDue(ProjectStep step) {
-        if (step.getEndDate() == null) {
+        if (step.getPlannedEndDate() == null) {
             return 0;
         }
-        return ChronoUnit.DAYS.between(LocalDate.now(), step.getEndDate());
+        return ChronoUnit.DAYS.between(LocalDate.now(), step.getPlannedEndDate());
     }
 
     /**
@@ -376,9 +373,10 @@ public class CrewDashboardService {
     private int calculateProgressPercentage(ProjectStep step) {
         return switch (step.getStatus()) {
             case NOT_STARTED -> 0;
+            case READY_TO_START -> 10; // Ready to start but not yet begun
             case IN_PROGRESS -> 50; // Assume 50% when in progress
             case COMPLETED -> 100;
-            case ON_HOLD -> 25; // Some progress made before being put on hold
+            case BLOCKED -> 25; // Some progress made before being put on hold
             case CANCELLED -> 0;
         };
     }

@@ -35,7 +35,7 @@ public class ProjectStepAssignmentResponse {
     private String declineReason;
     
     // Work details
-    private LocalDateTime startDate;
+    private LocalDateTime plannedStartDate;
     private LocalDateTime estimatedCompletionDate;
     private LocalDateTime actualCompletionDate;
     private String notes;

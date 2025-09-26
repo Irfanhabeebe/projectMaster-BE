@@ -12,6 +12,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "projects", uniqueConstraints = {
@@ -53,14 +54,8 @@ public class Project extends BaseEntity {
     @Column(name = "budget", precision = 15, scale = 2)
     private BigDecimal budget;
 
-    @Column(name = "start_date")
-    private LocalDate startDate;
-
     @Column(name = "expected_end_date")
     private LocalDate expectedEndDate;
-
-    @Column(name = "actual_end_date")
-    private LocalDate actualEndDate;
 
     @Enumerated(EnumType.STRING)
     @Builder.Default
@@ -73,4 +68,24 @@ public class Project extends BaseEntity {
 
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
+
+    // Schedule fields
+    @Column(name = "planned_start_date")
+    private LocalDate plannedStartDate;
+
+    @Column(name = "planned_end_date")
+    private LocalDate plannedEndDate;
+
+    @Column(name = "actual_start_date")
+    private LocalDate actualStartDate;
+
+    @Column(name = "actual_end_date")
+    private LocalDate actualEndDate;
+
+    @Column(name = "last_schedule_calculation")
+    private LocalDateTime lastScheduleCalculation;
+
+    @Builder.Default
+    @Column(name = "schedule_calculation_method", length = 50)
+    private String scheduleCalculationMethod = "DEPENDENCY_BASED";
 }

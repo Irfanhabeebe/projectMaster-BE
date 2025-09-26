@@ -41,18 +41,9 @@ public interface TaskDependencyRepository extends JpaRepository<TaskDependency, 
     List<TaskDependency> findCircularDependencies();
 
     /**
-     * Find all tasks that are blocking a specific task (direct and indirect dependencies)
+     * Find all tasks that are blocking a specific task (direct dependencies only for now)
      */
-    @Query(value = "WITH RECURSIVE task_deps AS (" +
-                   "  SELECT depends_on_task_id, task_id, 1 as level " +
-                   "  FROM task_dependencies WHERE task_id = :taskId " +
-                   "  UNION ALL " +
-                   "  SELECT td.depends_on_task_id, td.task_id, level + 1 " +
-                   "  FROM task_dependencies td " +
-                   "  JOIN task_deps ON td.task_id = task_deps.depends_on_task_id " +
-                   "  WHERE level < 10" +
-                   ") SELECT DISTINCT depends_on_task_id FROM task_deps", 
-           nativeQuery = true)
+    @Query("SELECT td.dependsOnTask.id FROM TaskDependency td WHERE td.task.id = :taskId")
     List<UUID> findAllBlockingTaskIds(@Param("taskId") UUID taskId);
 
     /**

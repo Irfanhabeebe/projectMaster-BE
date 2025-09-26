@@ -11,6 +11,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.ArrayList;
 
 @Entity
 @Table(name = "project_tasks")
@@ -19,6 +20,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+
 public class ProjectTask extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -37,11 +39,11 @@ public class ProjectTask extends BaseEntity {
     @Column(name = "status", nullable = false)
     private StageStatus status = StageStatus.NOT_STARTED;
 
-    @Column(name = "start_date")
-    private LocalDate startDate;
+    @Column(name = "planned_start_date")
+    private LocalDate plannedStartDate;
 
-    @Column(name = "end_date")
-    private LocalDate endDate;
+    @Column(name = "planned_end_date")
+    private LocalDate plannedEndDate;
 
     @Column(name = "actual_start_date")
     private LocalDate actualStartDate;
@@ -59,11 +61,11 @@ public class ProjectTask extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "order_index", nullable = false)
+    @Column(name = "order_index")
     private Integer orderIndex;
 
-    @Column(name = "estimated_hours")
-    private Integer estimatedHours;
+    @Column(name = "estimated_days")
+    private Integer estimatedDays;
 
     @Column(name = "required_skills")
     @JdbcTypeCode(SqlTypes.JSON)
@@ -81,5 +83,6 @@ public class ProjectTask extends BaseEntity {
 
     @OneToMany(mappedBy = "projectTask", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @OrderBy("orderIndex")
-    private List<ProjectStep> steps;
+    @Builder.Default
+    private List<ProjectStep> steps = new ArrayList<>();
 } 

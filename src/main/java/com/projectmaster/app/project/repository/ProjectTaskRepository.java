@@ -17,4 +17,10 @@ public interface ProjectTaskRepository extends JpaRepository<ProjectTask, UUID> 
 
     @Query("SELECT pt FROM ProjectTask pt WHERE pt.projectStage.project.id = :projectId ORDER BY pt.projectStage.orderIndex, pt.orderIndex")
     List<ProjectTask> findByProjectIdOrderByStageAndTaskOrder(@Param("projectId") UUID projectId);
+
+    @Query("SELECT pt FROM ProjectTask pt WHERE pt.projectStage.project.id = :projectId")
+    List<ProjectTask> findByProjectStagesProjectId(@Param("projectId") UUID projectId);
+
+    @Query("SELECT pt FROM ProjectTask pt WHERE pt.projectStage.id = :projectStageId ORDER BY pt.plannedStartDate ASC NULLS LAST, pt.orderIndex ASC")
+    List<ProjectTask> findByProjectStageIdOrderByPlannedStartDate(@Param("projectStageId") UUID projectStageId);
 } 

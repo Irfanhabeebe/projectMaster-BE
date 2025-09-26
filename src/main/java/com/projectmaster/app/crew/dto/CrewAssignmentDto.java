@@ -44,8 +44,8 @@ public class CrewAssignmentDto {
     @Schema(description = "Hourly rate for this assignment")
     private BigDecimal hourlyRate;
     
-    @Schema(description = "Estimated hours for this assignment")
-    private Integer estimatedHours;
+    @Schema(description = "Estimated days for this assignment")
+    private Integer estimatedDays;
     
     // Project context
     @Schema(description = "Project ID", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
@@ -62,9 +62,6 @@ public class CrewAssignmentDto {
     
     @Schema(description = "Project address")
     private AddressResponse projectAddress;
-    
-    @Schema(description = "Customer name", example = "John Doe")
-    private String customerName;
     
     @Schema(description = "Company name", example = "ABC Construction Co.")
     private String companyName;
@@ -105,8 +102,8 @@ public class CrewAssignmentDto {
     @Schema(description = "Step order index", example = "1")
     private Integer stepOrderIndex;
     
-    @Schema(description = "Step estimated hours", example = "8")
-    private Integer stepEstimatedHours;
+    @Schema(description = "Step estimated days", example = "2")
+    private Integer stepEstimatedDays;
     
     @Schema(description = "Step start date")
     private LocalDate stepStartDate;

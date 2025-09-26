@@ -37,11 +37,11 @@ public class ProjectStep extends BaseEntity {
     @Column(name = "status", nullable = false)
     private StepExecutionStatus status = StepExecutionStatus.NOT_STARTED;
 
-    @Column(name = "start_date")
-    private LocalDate startDate;
+    @Column(name = "planned_start_date")
+    private LocalDate plannedStartDate;
 
-    @Column(name = "end_date")
-    private LocalDate endDate;
+    @Column(name = "planned_end_date")
+    private LocalDate plannedEndDate;
 
     @Column(name = "actual_start_date")
     private LocalDate actualStartDate;
@@ -62,8 +62,8 @@ public class ProjectStep extends BaseEntity {
     @Column(name = "order_index", nullable = false)
     private Integer orderIndex;
 
-    @Column(name = "estimated_hours")
-    private Integer estimatedHours;
+    @Column(name = "estimated_days")
+    private Integer estimatedDays;
 
     @Column(name = "required_skills")
     @JdbcTypeCode(SqlTypes.JSON)
@@ -88,8 +88,9 @@ public class ProjectStep extends BaseEntity {
      */
     public enum StepExecutionStatus {
         NOT_STARTED,    // Step hasn't begun
+        READY_TO_START, // Step is ready to start
         IN_PROGRESS,    // Work actively happening
-        ON_HOLD,        // Step paused temporarily
+        BLOCKED,        // Step paused temporarily
         COMPLETED,      // Step finished successfully
         CANCELLED       // Step cancelled
     }

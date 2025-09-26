@@ -1,8 +1,6 @@
 package com.projectmaster.app.workflow.engine;
 
 import com.projectmaster.app.common.enums.StageStatus;
-import com.projectmaster.app.project.entity.ProjectStep.StepExecutionStatus;
-import com.projectmaster.app.project.entity.ProjectStepAssignment;
 import com.projectmaster.app.project.entity.ProjectStepAssignment.AssignmentStatus;
 import com.projectmaster.app.workflow.dto.WorkflowExecutionContext;
 import com.projectmaster.app.workflow.enums.WorkflowActionType;
@@ -77,10 +75,8 @@ public class WorkflowStateValidator {
             throw new WorkflowValidationException("Project step is required to start step");
         }
         
-        if (context.getProjectStage() == null || 
-            context.getProjectStage().getStatus() != StageStatus.IN_PROGRESS) {
-            throw new WorkflowValidationException("Parent stage must be in progress to start step");
-        }
+        // Allow starting steps even when parent stage/task is NOT_STARTED
+        // This will trigger cascading status updates to start parent stages/tasks
     }
     
     private void validateCompleteStep(WorkflowExecutionContext context) {

@@ -8,6 +8,7 @@ import lombok.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.ArrayList;
 
 @Entity
 @Table(name = "project_stages")
@@ -34,11 +35,11 @@ public class ProjectStage extends BaseEntity {
     @Column(name = "status", nullable = false)
     private StageStatus status = StageStatus.NOT_STARTED;
 
-    @Column(name = "start_date")
-    private LocalDate startDate;
+    @Column(name = "planned_start_date")
+    private LocalDate plannedStartDate;
 
-    @Column(name = "end_date")
-    private LocalDate endDate;
+    @Column(name = "planned_end_date")
+    private LocalDate plannedEndDate;
 
     @Column(name = "actual_start_date")
     private LocalDate actualStartDate;
@@ -80,5 +81,6 @@ public class ProjectStage extends BaseEntity {
 
     @OneToMany(mappedBy = "projectStage", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @OrderBy("orderIndex")
-    private List<ProjectTask> tasks;
+    @Builder.Default
+    private List<ProjectTask> tasks = new ArrayList<>();
 }

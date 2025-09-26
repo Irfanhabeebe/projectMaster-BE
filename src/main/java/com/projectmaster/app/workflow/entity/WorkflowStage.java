@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "workflow_stages")
@@ -46,4 +47,8 @@ public class WorkflowStage extends BaseEntity {
     @OneToMany(mappedBy = "workflowStage", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @OrderBy("orderIndex")
     private List<WorkflowTask> tasks;
+
+    // Reference to the standard workflow stage this was copied from
+    @Column(name = "standard_workflow_stage_id")
+    private UUID standardWorkflowStageId;
 }

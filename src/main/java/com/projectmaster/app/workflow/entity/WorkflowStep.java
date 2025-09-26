@@ -7,6 +7,8 @@ import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import java.util.UUID;
+
 @Entity
 @Table(name = "workflow_steps")
 @Getter
@@ -26,11 +28,11 @@ public class WorkflowStep extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "order_index", nullable = false)
+    @Column(name = "order_index")
     private Integer orderIndex;
 
-    @Column(name = "estimated_hours")
-    private Integer estimatedHours;
+    @Column(name = "estimated_days")
+    private Integer estimatedDays;
 
     @Column(name = "required_skills")
     @JdbcTypeCode(SqlTypes.JSON)
@@ -49,4 +51,8 @@ public class WorkflowStep extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "specialty_id", nullable = false)
     private Specialty specialty;
+
+    // Reference to the standard workflow step this was copied from
+    @Column(name = "standard_workflow_step_id")
+    private UUID standardWorkflowStepId;
 }

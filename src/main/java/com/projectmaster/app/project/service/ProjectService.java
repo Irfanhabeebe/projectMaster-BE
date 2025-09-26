@@ -14,6 +14,7 @@ import com.projectmaster.app.project.dto.ProjectDto;
 import com.projectmaster.app.project.dto.ProjectWorkflowResponse;
 import com.projectmaster.app.project.dto.ProjectStepAssignmentResponse;
 import com.projectmaster.app.project.dto.UpdateProjectRequest;
+import com.projectmaster.app.project.dto.DependencyResponse;
 import com.projectmaster.app.project.entity.Project;
 import com.projectmaster.app.project.entity.ProjectStage;
 import com.projectmaster.app.project.entity.ProjectTask;
@@ -22,6 +23,10 @@ import com.projectmaster.app.project.repository.ProjectRepository;
 import com.projectmaster.app.project.repository.ProjectStageRepository;
 import com.projectmaster.app.project.repository.ProjectTaskRepository;
 import com.projectmaster.app.project.repository.ProjectStepRepository;
+import com.projectmaster.app.workflow.entity.WorkflowDependency;
+import com.projectmaster.app.workflow.entity.ProjectDependency;
+import com.projectmaster.app.workflow.repository.WorkflowDependencyRepository;
+import com.projectmaster.app.workflow.repository.ProjectDependencyRepository;
 import com.projectmaster.app.security.service.CustomUserDetailsService;
 import com.projectmaster.app.company.entity.Company;
 import com.projectmaster.app.user.entity.User;
@@ -43,7 +48,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -63,8 +71,10 @@ public class ProjectService {
     private final WorkflowStageRepository workflowStageRepository;
     private final WorkflowTaskRepository workflowTaskRepository;
     private final WorkflowStepRepository workflowStepRepository;
+    private final WorkflowDependencyRepository workflowDependencyRepository;
+    private final ProjectDependencyRepository projectDependencyRepository;
     private final ProjectStepAssignmentService projectStepAssignmentService;
-
+    private final ProjectScheduleCalculator projectScheduleCalculator;
     /**
      * Create a new project
      */
@@ -101,8 +111,8 @@ public class ProjectService {
         }
 
         // Validate dates
-        if (request.getStartDate() != null && request.getExpectedEndDate() != null) {
-            if (request.getStartDate().isAfter(request.getExpectedEndDate())) {
+        if (request.getPlannedStartDate() != null && request.getExpectedEndDate() != null) {
+            if (request.getPlannedStartDate().isAfter(request.getExpectedEndDate())) {
                 throw new ProjectMasterException("Start date cannot be after expected end date");
             }
         }
@@ -123,7 +133,7 @@ public class ProjectService {
                 .description(request.getDescription())
                 .address(address)
                 .budget(request.getBudget())
-                .startDate(request.getStartDate())
+                .plannedStartDate(request.getPlannedStartDate())
                 .expectedEndDate(request.getExpectedEndDate())
                 .status(request.getStatus())
                 .progressPercentage(request.getProgressPercentage())
@@ -134,8 +144,20 @@ public class ProjectService {
         log.info("Project created successfully with id: {}", savedProject.getId());
 
         // Create project stages and steps from workflow template
-        createProjectStagesAndSteps(savedProject, workflowTemplate);
+        List<ProjectStage> savedProjectStages = createProjectStagesAndSteps(savedProject, workflowTemplate);
         log.info("Project stages and steps created successfully for project: {}", savedProject.getId());
+
+                // Copy dependencies from workflow template to project
+        List<ProjectDependency> projectDependencies =  copyWorkflowDependenciesToProject(project, workflowTemplate,savedProjectStages);
+        // Calculate project schedule using the new composite calculator
+
+        try {
+            projectScheduleCalculator.calculateProjectSchedule(savedProject, savedProjectStages, projectDependencies);
+            log.info("Project schedule calculated successfully for project: {}", savedProject.getId());
+        } catch (Exception e) {
+            log.error("Failed to calculate project schedule for project: {} - {}",
+                    savedProject.getId(), e.getMessage(), e);
+        }
 
         return convertToDto(savedProject);
     }
@@ -245,8 +267,8 @@ public class ProjectService {
         if (request.getBudget() != null) {
             project.setBudget(request.getBudget());
         }
-        if (request.getStartDate() != null) {
-            project.setStartDate(request.getStartDate());
+        if (request.getPlannedStartDate() != null) {
+            project.setPlannedStartDate(request.getPlannedStartDate());
         }
         if (request.getExpectedEndDate() != null) {
             project.setExpectedEndDate(request.getExpectedEndDate());
@@ -265,8 +287,8 @@ public class ProjectService {
         }
 
         // Validate dates if both are present
-        if (project.getStartDate() != null && project.getExpectedEndDate() != null) {
-            if (project.getStartDate().isAfter(project.getExpectedEndDate())) {
+        if (project.getPlannedStartDate() != null && project.getExpectedEndDate() != null) {
+            if (project.getPlannedStartDate().isAfter(project.getExpectedEndDate())) {
                 throw new ProjectMasterException("Start date cannot be after expected end date");
             }
         }
@@ -373,17 +395,18 @@ public class ProjectService {
     /**
      * Create project stages, tasks and steps by copying from workflow template
      */
-    private void createProjectStagesAndSteps(Project project, WorkflowTemplate workflowTemplate) {
+    private List<ProjectStage> createProjectStagesAndSteps(Project project, WorkflowTemplate workflowTemplate) {
         log.info("Creating project stages, tasks and steps for project: {} from template: {}", 
                 project.getId(), workflowTemplate.getId());
 
         // Get all stages from the workflow template ordered by order index
+        List<ProjectStage> projectStages = new ArrayList<>();
         List<WorkflowStage> workflowStages = workflowStageRepository
                 .findByWorkflowTemplateIdOrderByOrderIndex(workflowTemplate.getId());
 
         if (workflowStages.isEmpty()) {
             log.warn("No stages found in workflow template: {}", workflowTemplate.getId());
-            return;
+            return projectStages;
         }
 
         // Create project stages
@@ -410,23 +433,26 @@ public class ProjectService {
 
             // Create project tasks for this stage
             createProjectTasksForStage(savedProjectStage, workflowStage);
+            projectStages.add(savedProjectStage);
         }
 
+        
         log.info("Successfully created {} stages and their tasks/steps for project: {}", 
                 workflowStages.size(), project.getId());
+        return projectStages;
     }
 
     /**
      * Create project tasks for a given project stage by copying from workflow stage
      */
-    private void createProjectTasksForStage(ProjectStage projectStage, WorkflowStage workflowStage) {
+    private ProjectStage createProjectTasksForStage(ProjectStage projectStage, WorkflowStage workflowStage) {
         // Get all tasks from the workflow stage ordered by order index
         List<WorkflowTask> workflowTasks = workflowTaskRepository
                 .findByWorkflowStageIdOrderByOrderIndex(workflowStage.getId());
 
         if (workflowTasks.isEmpty()) {
             log.debug("No tasks found in workflow stage: {}", workflowStage.getId());
-            return;
+            return projectStage;
         }
 
         // Create project tasks
@@ -439,7 +465,7 @@ public class ProjectService {
                     // Copy all properties from WorkflowTask
                     .description(workflowTask.getDescription())
                     .orderIndex(workflowTask.getOrderIndex())
-                    .estimatedHours(workflowTask.getEstimatedHours())
+                    .estimatedDays(workflowTask.getEstimatedDays())
                     .requiredSkills(workflowTask.getRequiredSkills())
                     .requirements(workflowTask.getRequirements())
                     // Version tracking
@@ -450,23 +476,25 @@ public class ProjectService {
             log.debug("Created project task: {} for project stage: {}", savedProjectTask.getId(), projectStage.getId());
 
             // Create project steps for this task
-            createProjectStepsForTask(savedProjectTask, workflowTask);
+            savedProjectTask = createProjectStepsForTask(savedProjectTask, workflowTask);
+            projectStage.getTasks().add(savedProjectTask);
         }
-
+        
         log.debug("Successfully created {} tasks for project stage: {}", workflowTasks.size(), projectStage.getId());
+        return projectStage;
     }
 
     /**
      * Create project steps for a given project task by copying from workflow task
      */
-    private void createProjectStepsForTask(ProjectTask projectTask, WorkflowTask workflowTask) {
+    private ProjectTask createProjectStepsForTask(ProjectTask projectTask, WorkflowTask workflowTask) {
         // Get all steps from the workflow task ordered by order index
         List<WorkflowStep> workflowSteps = workflowStepRepository
                 .findByWorkflowTaskIdOrderByOrderIndex(workflowTask.getId());
 
         if (workflowSteps.isEmpty()) {
             log.debug("No steps found in workflow task: {}", workflowTask.getId());
-            return;
+            return projectTask;
         }
 
         // Create project steps
@@ -479,7 +507,7 @@ public class ProjectService {
                     // Copy all properties from WorkflowStep
                     .description(workflowStep.getDescription())
                     .orderIndex(workflowStep.getOrderIndex())
-                    .estimatedHours(workflowStep.getEstimatedHours())
+                    .estimatedDays(workflowStep.getEstimatedDays())
                     .requiredSkills(workflowStep.getRequiredSkills())
                     .requirements(workflowStep.getRequirements())
                     .specialty(workflowStep.getSpecialty()) // Copy the specialty from workflow step
@@ -488,10 +516,12 @@ public class ProjectService {
                     .build();
 
             ProjectStep savedProjectStep = projectStepRepository.save(projectStep);
+            projectTask.getSteps().add(savedProjectStep);
             log.debug("Created project step: {} for project task: {}", savedProjectStep.getId(), projectTask.getId());
         }
 
         log.debug("Successfully created {} steps for project task: {}", workflowSteps.size(), projectTask.getId());
+        return projectTask;
     }
 
     private Address createOrFindAddress(AddressRequest addressRequest) {
@@ -572,7 +602,7 @@ public class ProjectService {
                 .description(project.getDescription())
                 .address(convertToAddressResponse(project.getAddress()))
                 .budget(project.getBudget())
-                .startDate(project.getStartDate())
+                .startDate(project.getPlannedStartDate())
                 .expectedEndDate(project.getExpectedEndDate())
                 .actualEndDate(project.getActualEndDate())
                 .status(project.getStatus())
@@ -587,12 +617,18 @@ public class ProjectService {
      * Convert ProjectStage entity to ProjectStageResponse DTO
      */
     private ProjectWorkflowResponse.ProjectStageResponse convertToStageResponse(ProjectStage projectStage) {
-        // Get tasks for this stage
-        List<ProjectTask> projectTasks = projectTaskRepository.findByProjectStageIdOrderByOrderIndex(projectStage.getId());
+        // Get tasks for this stage ordered by planned start date
+        List<ProjectTask> projectTasks = projectTaskRepository.findByProjectStageIdOrderByPlannedStartDate(projectStage.getId());
         
         List<ProjectWorkflowResponse.ProjectTaskResponse> taskResponses = projectTasks.stream()
                 .map(this::convertToTaskResponse)
                 .toList();
+
+        // Get dependencies for this stage
+        List<DependencyResponse> stageDependencies = getDependenciesForEntity(
+                projectStage.getProject().getId(), 
+                com.projectmaster.app.workflow.entity.DependencyEntityType.STAGE, 
+                projectStage.getId());
 
         return ProjectWorkflowResponse.ProjectStageResponse.builder()
                 .id(projectStage.getId())
@@ -600,14 +636,15 @@ public class ProjectService {
                 .description(projectStage.getDescription())
                 .status(projectStage.getStatus())
                 .orderIndex(projectStage.getOrderIndex())
-                .startDate(projectStage.getStartDate())
-                .endDate(projectStage.getEndDate())
+                .startDate(projectStage.getPlannedStartDate())
+                .endDate(projectStage.getPlannedEndDate())
                 .actualStartDate(projectStage.getActualStartDate())
                 .actualEndDate(projectStage.getActualEndDate())
                 .notes(projectStage.getNotes())
                 .approvalsReceived(projectStage.getApprovalsReceived())
                 .estimatedDurationDays(projectStage.getEstimatedDurationDays())
                 .tasks(taskResponses)
+                .dependencies(stageDependencies)
                 .build();
     }
 
@@ -615,12 +652,18 @@ public class ProjectService {
      * Convert ProjectTask entity to ProjectTaskResponse DTO
      */
     private ProjectWorkflowResponse.ProjectTaskResponse convertToTaskResponse(ProjectTask projectTask) {
-        // Get steps for this task
-        List<ProjectStep> projectSteps = projectStepRepository.findByProjectTaskIdOrderByOrderIndex(projectTask.getId());
+        // Get steps for this task ordered by planned start date
+        List<ProjectStep> projectSteps = projectStepRepository.findByProjectTaskIdOrderByPlannedStartDate(projectTask.getId());
         
         List<ProjectWorkflowResponse.ProjectStepResponse> stepResponses = projectSteps.stream()
                 .map(this::convertToStepResponse)
                 .toList();
+
+        // Get dependencies for this task
+        List<DependencyResponse> taskDependencies = getDependenciesForEntity(
+                projectTask.getProjectStage().getProject().getId(), 
+                com.projectmaster.app.workflow.entity.DependencyEntityType.TASK, 
+                projectTask.getId());
 
         return ProjectWorkflowResponse.ProjectTaskResponse.builder()
                 .id(projectTask.getId())
@@ -628,9 +671,9 @@ public class ProjectService {
                 .description(projectTask.getDescription())
                 .status(projectTask.getStatus())
                 .orderIndex(projectTask.getOrderIndex())
-                .estimatedHours(projectTask.getEstimatedHours())
-                .startDate(projectTask.getStartDate())
-                .endDate(projectTask.getEndDate())
+                .estimatedDays(projectTask.getEstimatedDays())
+                .startDate(projectTask.getPlannedStartDate())
+                .endDate(projectTask.getPlannedEndDate())
                 .actualStartDate(projectTask.getActualStartDate())
                 .actualEndDate(projectTask.getActualEndDate())
                 .notes(projectTask.getNotes())
@@ -638,6 +681,7 @@ public class ProjectService {
                 .requiredSkills(projectTask.getRequiredSkills())
                 .requirements(projectTask.getRequirements())
                 .steps(stepResponses)
+                .dependencies(taskDependencies)
                 .build();
     }
 
@@ -662,15 +706,21 @@ public class ProjectService {
                     .build();
         }
 
+        // Get dependencies for this step
+        List<DependencyResponse> stepDependencies = getDependenciesForEntity(
+                projectStep.getProjectTask().getProjectStage().getProject().getId(), 
+                com.projectmaster.app.workflow.entity.DependencyEntityType.STEP, 
+                projectStep.getId());
+
         return ProjectWorkflowResponse.ProjectStepResponse.builder()
                 .id(projectStep.getId())
                 .name(projectStep.getName())
                 .description(projectStep.getDescription())
                 .status(projectStep.getStatus())
                 .orderIndex(projectStep.getOrderIndex())
-                .estimatedHours(projectStep.getEstimatedHours())
-                .startDate(projectStep.getStartDate())
-                .endDate(projectStep.getEndDate())
+                .estimatedDays(projectStep.getEstimatedDays())
+                .startDate(projectStep.getPlannedStartDate())
+                .endDate(projectStep.getPlannedEndDate())
                 .actualStartDate(projectStep.getActualStartDate())
                 .actualEndDate(projectStep.getActualEndDate())
                 .notes(projectStep.getNotes())
@@ -679,7 +729,188 @@ public class ProjectService {
                 .requirements(projectStep.getRequirements())
                 .specialty(specialtyResponse)
                 .assignments(assignments)
+                .dependencies(stepDependencies)
                 .build();
+    }
+
+    /**
+     * Copy dependencies from workflow template to project
+     */
+    private List<ProjectDependency> copyWorkflowDependenciesToProject(Project project, WorkflowTemplate workflowTemplate, List<ProjectStage> savedProjectStages) {
+        log.info("Copying workflow dependencies to project: {} from template: {}", 
+                project.getId(), workflowTemplate.getId());
+        List<ProjectDependency> savedDependencies = new ArrayList<>();
+        try {
+            // Get all workflow dependencies for this template
+            List<WorkflowDependency> workflowDependencies = workflowDependencyRepository
+                    .findByWorkflowTemplateId(workflowTemplate.getId());
+            
+            
+            if (workflowDependencies.isEmpty()) {
+                log.debug("No workflow dependencies found for template: {}", workflowTemplate.getId());
+                return savedDependencies;
+            }
+            
+            // Create mapping from workflow entities to project entities
+            Map<UUID, UUID> workflowToProjectMapping = createWorkflowToProjectMapping(project,savedProjectStages);
+            
+            int copiedCount = 0;
+            for (WorkflowDependency workflowDep : workflowDependencies) {
+                try {
+                    ProjectDependency projectDep = createProjectDependency(workflowDep, project.getId(), workflowToProjectMapping);
+                    if (projectDep != null) {
+                        projectDep = projectDependencyRepository.save(projectDep);
+                        savedDependencies.add(projectDep);
+                        copiedCount++;
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to copy workflow dependency {}: {}", workflowDep.getId(), e.getMessage());
+                }
+            }
+            
+            log.info("Copied {} out of {} workflow dependencies to project: {}", 
+                    copiedCount, workflowDependencies.size(), project.getId());
+            
+        } catch (Exception e) {
+            log.error("Error copying workflow dependencies to project: {}", project.getId(), e);
+        }
+        return savedDependencies;
+    }
+    
+    /**
+     * Create mapping from workflow entities to project entities
+     */
+    private Map<UUID, UUID> createWorkflowToProjectMapping(Project project, List<ProjectStage> projectStages) {
+        Map<UUID, UUID> mapping = new HashMap<>();
+        
+        // Get all project stages with their workflow stages
+        
+        for (ProjectStage projectStage : projectStages) {
+            // Map workflow stage to project stage
+            mapping.put(projectStage.getWorkflowStage().getId(), projectStage.getId());
+            
+            // Get all project tasks for this stage
+            
+            for (ProjectTask projectTask : projectStage.getTasks()) {
+                // Map workflow task to project task
+                mapping.put(projectTask.getWorkflowTask().getId(), projectTask.getId());
+                
+                // Get all project steps for this task
+                
+                for (ProjectStep projectStep : projectTask.getSteps()) {
+                    // Map workflow step to project step
+                    mapping.put(projectStep.getWorkflowStep().getId(), projectStep.getId());
+                }
+            }
+        }
+        
+        log.debug("Created workflow to project mapping with {} entries for project: {}", 
+                mapping.size(), project.getId());
+        
+        return mapping;
+    }
+    
+    /**
+     * Create a project dependency from a workflow dependency
+     */
+    private ProjectDependency createProjectDependency(WorkflowDependency workflowDep, UUID projectId, 
+                                                     Map<UUID, UUID> workflowToProjectMapping) {
+        
+        // Map workflow entity IDs to project entity IDs
+        UUID dependentProjectEntityId = workflowToProjectMapping.get(workflowDep.getDependentEntityId());
+        UUID dependsOnProjectEntityId = workflowToProjectMapping.get(workflowDep.getDependsOnEntityId());
+        
+        if (dependentProjectEntityId == null || dependsOnProjectEntityId == null) {
+            log.warn("Could not map workflow entities to project entities for dependency {}: dependent={}, dependsOn={}", 
+                    workflowDep.getId(), workflowDep.getDependentEntityId(), workflowDep.getDependsOnEntityId());
+            return null;
+        }
+        
+        // Convert workflow dependency entity types to project dependency entity types
+        com.projectmaster.app.workflow.entity.DependencyEntityType dependentType = workflowDep.getDependentEntityType();
+        com.projectmaster.app.workflow.entity.DependencyEntityType dependsOnType = workflowDep.getDependsOnEntityType();
+        
+        return ProjectDependency.builder()
+                .projectId(projectId)
+                .dependentEntityType(dependentType)
+                .dependentEntityId(dependentProjectEntityId)
+                .dependsOnEntityType(dependsOnType)
+                .dependsOnEntityId(dependsOnProjectEntityId)
+                .dependencyType(workflowDep.getDependencyType())
+                .lagDays(workflowDep.getLagDays())
+                .status(com.projectmaster.app.workflow.entity.DependencyStatus.PENDING)
+                .build();
+    }
+
+    /**
+     * Get dependencies for a specific entity (stage, task, or step)
+     */
+    private List<DependencyResponse> getDependenciesForEntity(UUID projectId, 
+            com.projectmaster.app.workflow.entity.DependencyEntityType entityType, UUID entityId) {
+        
+        // Get all dependencies where this entity is the dependent (i.e., this entity depends on others)
+        List<ProjectDependency> dependencies = projectDependencyRepository
+                .findByDependentEntityTypeAndDependentEntityIdAndProjectId(entityType, entityId, projectId);
+        
+        return dependencies.stream()
+                .map(this::convertToDependencyResponse)
+                .toList();
+    }
+
+    /**
+     * Convert ProjectDependency entity to DependencyResponse DTO
+     */
+    private DependencyResponse convertToDependencyResponse(ProjectDependency dependency) {
+        // Get entity names for better readability
+        String dependentEntityName = getEntityName(dependency.getDependentEntityType(), dependency.getDependentEntityId());
+        String dependsOnEntityName = getEntityName(dependency.getDependsOnEntityType(), dependency.getDependsOnEntityId());
+        
+        return DependencyResponse.builder()
+                .id(dependency.getId())
+                .dependentEntityType(dependency.getDependentEntityType())
+                .dependentEntityId(dependency.getDependentEntityId())
+                .dependentEntityName(dependentEntityName)
+                .dependsOnEntityType(dependency.getDependsOnEntityType())
+                .dependsOnEntityId(dependency.getDependsOnEntityId())
+                .dependsOnEntityName(dependsOnEntityName)
+                .dependencyType(dependency.getDependencyType())
+                .lagDays(dependency.getLagDays())
+                .status(dependency.getStatus())
+                .satisfiedAt(dependency.getSatisfiedAt())
+                .isCriticalPath(dependency.getIsCriticalPath())
+                .slackDays(dependency.getSlackDays())
+                .expectedDurationDays(dependency.getExpectedDurationDays())
+                .notes(dependency.getNotes())
+                .createdAt(dependency.getCreatedAt())
+                .updatedAt(dependency.getUpdatedAt())
+                .build();
+    }
+
+    /**
+     * Get entity name by type and ID
+     */
+    private String getEntityName(com.projectmaster.app.workflow.entity.DependencyEntityType entityType, UUID entityId) {
+        try {
+            switch (entityType) {
+                case STAGE:
+                    return projectStageRepository.findById(entityId)
+                            .map(ProjectStage::getName)
+                            .orElse("Unknown Stage");
+                case TASK:
+                    return projectTaskRepository.findById(entityId)
+                            .map(ProjectTask::getName)
+                            .orElse("Unknown Task");
+                case STEP:
+                    return projectStepRepository.findById(entityId)
+                            .map(ProjectStep::getName)
+                            .orElse("Unknown Step");
+                default:
+                    return "Unknown Entity";
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get entity name for {} with ID {}: {}", entityType, entityId, e.getMessage());
+            return "Unknown Entity";
+        }
     }
 
     /**

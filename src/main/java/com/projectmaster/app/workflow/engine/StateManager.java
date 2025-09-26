@@ -11,10 +11,9 @@ import com.projectmaster.app.project.repository.ProjectStageRepository;
 import com.projectmaster.app.project.repository.ProjectStepAssignmentRepository;
 import com.projectmaster.app.project.repository.ProjectStepRepository;
 import com.projectmaster.app.project.repository.ProjectTaskRepository;
-import com.projectmaster.app.task.repository.TaskRepository;
+import com.projectmaster.app.workflow.service.StepReadinessChecker;
 import com.projectmaster.app.workflow.dto.WorkflowExecutionContext;
 import com.projectmaster.app.workflow.dto.WorkflowExecutionResult;
-import com.projectmaster.app.workflow.enums.WorkflowLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -24,6 +23,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Component
 @Slf4j
@@ -35,7 +35,7 @@ public class StateManager {
     private final ProjectStepRepository projectStepRepository;
     private final ProjectStepAssignmentRepository projectStepAssignmentRepository;
     private final ProjectTaskRepository projectTaskRepository;
-    private final TaskRepository taskRepository;
+    private final StepReadinessChecker stepReadinessChecker;
     
     public void updateState(WorkflowExecutionContext context, WorkflowExecutionResult result) {
         log.debug("Updating state for workflow level: {}", result.getTargetLevel());
@@ -98,10 +98,18 @@ public class StateManager {
         step.setStatus(newStatus);
         step.setUpdatedAt(Instant.now());
         
-        if (newStatus == StepExecutionStatus.IN_PROGRESS && step.getActualStartDate() == null) {
-            step.setActualStartDate(LocalDate.now());
+        if (newStatus == StepExecutionStatus.IN_PROGRESS) {
+            if (step.getActualStartDate() == null) {
+                step.setActualStartDate(LocalDate.now());
+            }
+            
+            // Implement cascading status updates
+            handleCascadingStartUpdates(step);
+            
         } else if (newStatus == StepExecutionStatus.COMPLETED) {
             step.setActualEndDate(LocalDate.now());
+            // Check if other steps in the same task can now be ready to start
+            checkOtherStepsInTask(step.getProjectTask());
         }
         
         projectStepRepository.save(step);
@@ -109,6 +117,40 @@ public class StateManager {
         
         // Check if all steps in task are completed to auto-complete task
         checkTaskCompletion(step.getProjectTask());
+    }
+    
+    /**
+     * Handle cascading status updates when a step is started
+     * - If parent task is NOT_STARTED, start it
+     * - If parent stage is NOT_STARTED, start it
+     */
+    private void handleCascadingStartUpdates(ProjectStep step) {
+        var task = step.getProjectTask();
+        var stage = task.getProjectStage();
+        
+        // Start parent task if it's not started
+        if (task.getStatus() == StageStatus.NOT_STARTED) {
+            log.info("Auto-starting parent task {} as step {} is being started", task.getId(), step.getId());
+            task.setStatus(StageStatus.IN_PROGRESS);
+            task.setActualStartDate(LocalDate.now());
+            task.setUpdatedAt(Instant.now());
+            projectTaskRepository.save(task);
+            
+            // Check if this is the first step starting in the task
+            checkOtherStepsInTask(task);
+        }
+        
+        // Start parent stage if it's not started
+        if (stage.getStatus() == StageStatus.NOT_STARTED) {
+            log.info("Auto-starting parent stage {} as step {} is being started", stage.getId(), step.getId());
+            stage.setStatus(StageStatus.IN_PROGRESS);
+            stage.setActualStartDate(LocalDate.now());
+            stage.setUpdatedAt(Instant.now());
+            projectStageRepository.save(stage);
+            
+            // Check if this is the first task starting in the stage
+            checkOtherTasksInStage(stage);
+        }
     }
     
     private void updateTaskState(WorkflowExecutionContext context, WorkflowExecutionResult result) {
@@ -134,6 +176,11 @@ public class StateManager {
         
         projectStepAssignmentRepository.save(assignment);
         log.info("Assignment {} status updated to {}", assignment.getId(), newStatus);
+        
+        // Check if step should be ready to start after assignment acceptance
+        if (newStatus == AssignmentStatus.ACCEPTED) {
+            checkStepReadiness(assignment.getProjectStep());
+        }
     }
     
     private void autoStartNextStage(ProjectStage completedStage) {
@@ -198,5 +245,49 @@ public class StateManager {
             // Auto-start next stage
             autoStartNextStage(stage);
         }
+    }
+
+    /**
+     * Check if a step is ready to start after assignment acceptance
+     */
+    private void checkStepReadiness(ProjectStep step) {
+        log.debug("Checking step readiness for step: {}", step.getId());
+        stepReadinessChecker.checkAndUpdateStepStatus(step.getId());
+    }
+
+    /**
+     * Check other steps in the same task when a step is completed
+     */
+    private void checkOtherStepsInTask(ProjectTask task) {
+        log.debug("Checking other steps in task: {}", task.getId());
+        List<ProjectStep> allSteps = projectStepRepository
+                .findByProjectTaskIdOrderByOrderIndex(task.getId());
+        
+        for (ProjectStep step : allSteps) {
+            if (step.getStatus() == ProjectStep.StepExecutionStatus.NOT_STARTED) {
+                stepReadinessChecker.checkAndUpdateStepStatus(step.getId());
+            }
+        }
+    }
+    
+    private void checkOtherTasksInStage(ProjectStage stage) {
+        log.debug("Checking other tasks in stage: {}", stage.getId());
+        List<ProjectTask> allTasks = projectTaskRepository
+                .findByProjectStageIdOrderByOrderIndex(stage.getId());
+        
+        for (ProjectTask task : allTasks) {
+            if (task.getStatus() == StageStatus.NOT_STARTED) {
+                // Check if any steps in this task are ready to start
+                checkOtherStepsInTask(task);
+            }
+        }
+    }
+
+    /**
+     * Check all steps in a project for readiness (useful for bulk operations)
+     */
+    public void checkAllStepsInProject(UUID projectId) {
+        log.info("Checking all steps in project: {}", projectId);
+        stepReadinessChecker.checkAllStepsInProject(projectId);
     }
 }

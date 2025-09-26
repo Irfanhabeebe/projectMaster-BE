@@ -45,7 +45,7 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
     /**
      * Find projects with start date between given dates
      */
-    @Query("SELECT p FROM Project p WHERE p.startDate BETWEEN :startDate AND :endDate")
+    @Query("SELECT p FROM Project p WHERE p.plannedStartDate BETWEEN :startDate AND :endDate")
     List<Project> findProjectsStartingBetween(@Param("startDate") LocalDate startDate, 
                                             @Param("endDate") LocalDate endDate);
 
@@ -111,4 +111,9 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
      */
     @Query("SELECT p FROM Project p LEFT JOIN FETCH p.address WHERE p.id = :projectId")
     java.util.Optional<Project> findByIdWithAddress(@Param("projectId") UUID projectId);
+
+    /**
+     * Find projects by status list
+     */
+    List<Project> findByStatusIn(List<ProjectStatus> statuses);
 }

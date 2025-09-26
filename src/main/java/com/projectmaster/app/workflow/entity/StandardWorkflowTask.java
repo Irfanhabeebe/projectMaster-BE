@@ -28,11 +28,11 @@ public class StandardWorkflowTask extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "order_index", nullable = false)
+    @Column(name = "order_index")
     private Integer orderIndex;
 
-    @Column(name = "estimated_hours")
-    private Integer estimatedHours;
+    @Column(name = "estimated_days")
+    private Integer estimatedDays;
 
     @Column(name = "required_skills")
     @JdbcTypeCode(SqlTypes.JSON)

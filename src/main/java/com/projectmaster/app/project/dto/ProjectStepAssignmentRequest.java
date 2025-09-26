@@ -22,5 +22,5 @@ public class ProjectStepAssignmentRequest {
 
     private String notes;
     private BigDecimal hourlyRate;
-    private Integer estimatedHours;
+    private Integer estimatedDays;
 }

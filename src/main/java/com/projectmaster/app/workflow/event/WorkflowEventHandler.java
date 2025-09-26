@@ -1,5 +1,6 @@
 package com.projectmaster.app.workflow.event;
 
+import com.projectmaster.app.workflow.service.StepReadinessChecker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -10,6 +11,8 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @RequiredArgsConstructor
 public class WorkflowEventHandler {
+    
+    private final StepReadinessChecker stepReadinessChecker;
     
     @EventListener
     @Async
@@ -70,5 +73,32 @@ public class WorkflowEventHandler {
     private void generateStageCompletionReport(StageCompletedEvent event) {
         // TODO: Implement completion report generation
         log.debug("Generating stage completion report for stage: {}", event.getStageId());
+    }
+
+    @EventListener
+    @Async
+    public void handleStepCompleted(StepCompletedEvent event) {
+        log.info("Step completed: {} for project: {}", event.getStepName(), event.getProjectId());
+        
+        // Check if other steps in the same task can now be ready to start
+        stepReadinessChecker.checkAllStepsInProject(event.getProjectId());
+    }
+
+    @EventListener
+    @Async
+    public void handleTaskCompleted(TaskCompletedEvent event) {
+        log.info("Task completed: {} for project: {}", event.getTaskName(), event.getProjectId());
+        
+        // Check if steps in other tasks can now be ready to start
+        stepReadinessChecker.checkAllStepsInProject(event.getProjectId());
+    }
+
+    @EventListener
+    @Async
+    public void handleAssignmentAccepted(AssignmentAcceptedEvent event) {
+        log.info("Assignment accepted: {} for step: {}", event.getAssignmentId(), event.getStepId());
+        
+        // Check if the step is now ready to start
+        stepReadinessChecker.checkAndUpdateStepStatus(event.getStepId());
     }
 }

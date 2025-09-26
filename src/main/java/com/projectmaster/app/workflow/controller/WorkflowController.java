@@ -116,16 +116,16 @@ public class WorkflowController {
     /**
      * Start a project step
      */
-    @PostMapping("/projects/{projectId}/steps/{stepId}/start")
+    @PostMapping("/steps/{stepId}/start")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PROJECT_MANAGER') or hasRole('TRADIE')")
     public ResponseEntity<ApiResponse<WorkflowExecutionResult>> startStep(
-            @PathVariable UUID projectId,
             @PathVariable UUID stepId,
             Authentication authentication) {
         
-        log.info("Starting step {} for project {}", stepId, projectId);
+        log.info("Starting step {}", stepId);
         
         UUID userId = getCurrentUserId(authentication);
-        WorkflowExecutionResult result = workflowService.startStep(projectId, stepId, userId);
+        WorkflowExecutionResult result = workflowService.startStep(stepId, userId);
         
         return ResponseEntity.ok(ApiResponse.<WorkflowExecutionResult>builder()
                 .success(result.isSuccess())

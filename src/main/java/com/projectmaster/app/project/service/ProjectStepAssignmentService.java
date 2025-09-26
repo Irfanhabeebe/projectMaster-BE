@@ -54,6 +54,9 @@ public class ProjectStepAssignmentService {
         // Validate assignment type and related entity
         validateAssignmentRequest(request);
 
+        // Check if step already has active assignments (PENDING or ACCEPTED)
+        validateNoActiveAssignments(request.getProjectStepId());
+
         // Create assignment
         ProjectStepAssignment assignment = ProjectStepAssignment.builder()
                 .projectStep(projectStep)
@@ -69,7 +72,7 @@ public class ProjectStepAssignmentService {
                 .assignedDate(LocalDateTime.now())
                 .notes(request.getNotes())
                 .hourlyRate(request.getHourlyRate())
-                .estimatedHours(request.getEstimatedHours())
+                .estimatedDays(request.getEstimatedDays())
                 .build();
 
         ProjectStepAssignment savedAssignment = assignmentRepository.save(assignment);
@@ -183,6 +186,39 @@ public class ProjectStepAssignmentService {
     }
 
     /**
+     * Validate that the project step doesn't already have active assignments
+     */
+    private void validateNoActiveAssignments(UUID projectStepId) {
+        List<ProjectStepAssignment> activeAssignments = assignmentRepository.findActiveAssignmentsByProjectStepId(projectStepId);
+        
+        if (!activeAssignments.isEmpty()) {
+            ProjectStepAssignment existingAssignment = activeAssignments.get(0);
+            String assigneeInfo = getAssigneeInfo(existingAssignment);
+            
+            throw new ProjectMasterException(
+                String.format("Project step already has an active assignment (%s) to %s. " +
+                             "Only one pending or accepted assignment is allowed per step.", 
+                             existingAssignment.getStatus().toString().toLowerCase(), 
+                             assigneeInfo),
+                "STEP_ALREADY_ASSIGNED"
+            );
+        }
+    }
+
+    /**
+     * Get assignee information for error messages
+     */
+    private String getAssigneeInfo(ProjectStepAssignment assignment) {
+        if (assignment.getAssignedToType() == AssignmentType.CREW && assignment.getCrew() != null) {
+            return "crew member: " + assignment.getCrew().getFullName();
+        } else if (assignment.getAssignedToType() == AssignmentType.CONTRACTING_COMPANY && assignment.getContractingCompany() != null) {
+            return "contracting company: " + assignment.getContractingCompany().getName();
+        } else {
+            return "unknown assignee";
+        }
+    }
+
+    /**
      * Map entity to response DTO
      */
     private ProjectStepAssignmentResponse mapToResponse(ProjectStepAssignment assignment) {
@@ -216,7 +252,7 @@ public class ProjectStepAssignmentService {
         response.setDeclineReason(assignment.getDeclineReason());
         
         // Set work details
-        response.setStartDate(assignment.getStartDate());
+        response.setPlannedStartDate(assignment.getPlannedStartDate());
         response.setEstimatedCompletionDate(assignment.getEstimatedCompletionDate());
         response.setActualCompletionDate(assignment.getActualCompletionDate());
         response.setNotes(assignment.getNotes());

@@ -55,7 +55,7 @@ public class ProjectDto {
     @Schema(description = "Project budget amount", example = "500000.00")
     private BigDecimal budget;
     
-    @Schema(description = "Project start date", example = "2024-01-15")
+    @Schema(description = "Project planned start date", example = "2024-01-15")
     private LocalDate startDate;
     
     @Schema(description = "Expected project completion date", example = "2024-12-31")

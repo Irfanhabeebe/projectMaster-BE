@@ -8,6 +8,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "workflow_tasks")
@@ -28,11 +29,11 @@ public class WorkflowTask extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "order_index", nullable = false)
+    @Column(name = "order_index")
     private Integer orderIndex;
 
-    @Column(name = "estimated_hours")
-    private Integer estimatedHours;
+    @Column(name = "estimated_days")
+    private Integer estimatedDays;
 
     @Column(name = "required_skills")
     @JdbcTypeCode(SqlTypes.JSON)
@@ -51,4 +52,8 @@ public class WorkflowTask extends BaseEntity {
     @OneToMany(mappedBy = "workflowTask", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @OrderBy("orderIndex")
     private List<WorkflowStep> steps;
+
+    // Reference to the standard workflow task this was copied from
+    @Column(name = "standard_workflow_task_id")
+    private UUID standardWorkflowTaskId;
 } 

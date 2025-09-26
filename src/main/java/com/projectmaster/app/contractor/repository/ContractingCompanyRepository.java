@@ -76,4 +76,14 @@ public interface ContractingCompanyRepository extends JpaRepository<ContractingC
      * Check if name exists
      */
     boolean existsByNameIgnoreCase(String name);
+
+    /**
+     * Find contracting companies by specialty ID and company ID
+     * Note: ContractingCompany doesn't have direct company relationship, 
+     * so we filter by the company of the user who created the contracting company
+     */
+    @Query("SELECT DISTINCT cc FROM ContractingCompany cc " +
+           "JOIN cc.specialties ccs " +
+           "WHERE ccs.specialty.id = :specialtyId AND cc.createdByUser.company.id = :companyId AND ccs.active = true AND cc.active = true")
+    List<ContractingCompany> findBySpecialtyIdAndCompanyId(@Param("specialtyId") UUID specialtyId, @Param("companyId") UUID companyId);
 }

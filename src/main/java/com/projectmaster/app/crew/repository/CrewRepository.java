@@ -68,4 +68,12 @@ public interface CrewRepository extends JpaRepository<Crew, UUID> {
            "JOIN cs.specialty s " +
            "WHERE s.specialtyType = :specialtyType AND cs.active = true AND c.active = true")
     List<Crew> findBySpecialtyType(@Param("specialtyType") String specialtyType);
+
+    /**
+     * Find crew by specialty ID and company ID
+     */
+    @Query("SELECT DISTINCT c FROM Crew c " +
+           "JOIN c.specialties cs " +
+           "WHERE cs.specialty.id = :specialtyId AND c.company.id = :companyId AND cs.active = true AND c.active = true")
+    List<Crew> findBySpecialtyIdAndCompanyId(@Param("specialtyId") UUID specialtyId, @Param("companyId") UUID companyId);
 }

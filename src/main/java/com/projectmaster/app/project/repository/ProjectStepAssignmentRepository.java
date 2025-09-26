@@ -76,4 +76,13 @@ public interface ProjectStepAssignmentRepository extends JpaRepository<ProjectSt
            "AND psa.status IN ('PENDING', 'ACCEPTED') " +
            "ORDER BY psa.createdAt DESC")
     List<ProjectStepAssignment> findActiveAssignmentsByProjectStepId(@Param("projectStepId") UUID projectStepId);
+
+    /**
+     * Find assignments by crew ID ordered by step start date (excluding declined assignments)
+     */
+    @Query("SELECT psa FROM ProjectStepAssignment psa " +
+           "WHERE psa.crew.id = :crewId " +
+           "AND psa.status IN ('PENDING', 'ACCEPTED') " +
+           "ORDER BY psa.projectStep.plannedStartDate ASC NULLS LAST, psa.createdAt DESC")
+    List<ProjectStepAssignment> findByCrewIdOrderByStepStartDate(@Param("crewId") UUID crewId);
 }

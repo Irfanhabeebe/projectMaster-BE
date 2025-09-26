@@ -15,7 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -40,6 +39,13 @@ public class AssignmentRecommendationsService {
         ProjectStep projectStep = projectStepRepository.findById(stepId)
                 .orElseThrow(() -> new EntityNotFoundException("ProjectStep", stepId));
 
+        // Get company from project step: step -> task -> stage -> project -> company
+        UUID companyId = projectStep.getProjectTask()
+                .getProjectStage()
+                .getProject()
+                .getCompany()
+                .getId();
+
         if (projectStep.getSpecialty() == null) {
             throw new IllegalStateException("Project step does not have a required specialty");
         }
@@ -48,13 +54,13 @@ public class AssignmentRecommendationsService {
         AssignmentRecommendationsResponse.RequiredSpecialtyInfo requiredSpecialty = 
                 buildRequiredSpecialtyInfo(projectStep.getSpecialty());
 
-        // Get crew recommendations
+        // Get crew recommendations filtered by company
         List<AssignmentRecommendationsResponse.CrewRecommendation> crewRecommendations = 
-                getCrewRecommendations(projectStep.getSpecialty());
+                getCrewRecommendations(projectStep.getSpecialty(), companyId);
 
-        // Get contracting company recommendations
+        // Get contracting company recommendations filtered by company
         List<AssignmentRecommendationsResponse.ContractingCompanyRecommendation> companyRecommendations = 
-                getContractingCompanyRecommendations(projectStep.getSpecialty());
+                getContractingCompanyRecommendations(projectStep.getSpecialty(), companyId);
 
         // Sort recommendations by specialty match and rating
         crewRecommendations.sort(Comparator
@@ -77,10 +83,10 @@ public class AssignmentRecommendationsService {
     }
 
     /**
-     * Get crew recommendations for a specialty
+     * Get crew recommendations for a specialty within the same company
      */
-    private List<AssignmentRecommendationsResponse.CrewRecommendation> getCrewRecommendations(Specialty specialty) {
-        List<Crew> availableCrew = crewRepository.findBySpecialtyId(specialty.getId());
+    private List<AssignmentRecommendationsResponse.CrewRecommendation> getCrewRecommendations(Specialty specialty, UUID companyId) {
+        List<Crew> availableCrew = crewRepository.findBySpecialtyIdAndCompanyId(specialty.getId(), companyId);
         
         return availableCrew.stream()
                 .map(crew -> buildCrewRecommendation(crew, specialty))
@@ -88,10 +94,10 @@ public class AssignmentRecommendationsService {
     }
 
     /**
-     * Get contracting company recommendations for a specialty
+     * Get contracting company recommendations for a specialty within the same company
      */
-    private List<AssignmentRecommendationsResponse.ContractingCompanyRecommendation> getContractingCompanyRecommendations(Specialty specialty) {
-        List<ContractingCompany> availableCompanies = contractingCompanyRepository.findBySpecialtyId(specialty.getId());
+    private List<AssignmentRecommendationsResponse.ContractingCompanyRecommendation> getContractingCompanyRecommendations(Specialty specialty, UUID companyId) {
+        List<ContractingCompany> availableCompanies = contractingCompanyRepository.findBySpecialtyIdAndCompanyId(specialty.getId(), companyId);
         
         return availableCompanies.stream()
                 .map(company -> buildContractingCompanyRecommendation(company, specialty))
@@ -148,12 +154,6 @@ public class AssignmentRecommendationsService {
         // Calculate current workload
         String currentWorkload = calculateCompanyWorkload(company);
         
-        // Get company specialty details
-        Optional<com.projectmaster.app.contractor.entity.ContractingCompanySpecialty> companySpecialty = 
-                company.getSpecialties().stream()
-                        .filter(cs -> cs.getSpecialty().getId().equals(specialty.getId()))
-                        .findFirst();
-
         // Calculate rating (default to 3.0 if no rating available)
         Double rating = 3.0; // Default rating since ContractingCompanySpecialty doesn't have rating field
 

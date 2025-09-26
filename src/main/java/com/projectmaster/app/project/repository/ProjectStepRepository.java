@@ -20,4 +20,10 @@ public interface ProjectStepRepository extends JpaRepository<ProjectStep, UUID> 
 
     @Query("SELECT ps FROM ProjectStep ps WHERE ps.projectTask.projectStage.project.id = :projectId ORDER BY ps.projectTask.projectStage.orderIndex, ps.projectTask.orderIndex, ps.orderIndex")
     List<ProjectStep> findByProjectIdOrderByStageAndTaskAndStepOrder(@Param("projectId") UUID projectId);
+
+    @Query("SELECT ps FROM ProjectStep ps WHERE ps.projectTask.projectStage.project.id = :projectId")
+    List<ProjectStep> findByProjectTasksProjectStagesProjectId(@Param("projectId") UUID projectId);
+
+    @Query("SELECT ps FROM ProjectStep ps WHERE ps.projectTask.id = :projectTaskId ORDER BY ps.plannedStartDate ASC NULLS LAST, ps.orderIndex ASC")
+    List<ProjectStep> findByProjectTaskIdOrderByPlannedStartDate(@Param("projectTaskId") UUID projectTaskId);
 }

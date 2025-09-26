@@ -56,8 +56,8 @@ public class ProjectStepAssignment extends BaseEntity {
     @Column(name = "decline_reason")
     private String declineReason;
 
-    @Column(name = "start_date")
-    private LocalDateTime startDate;
+    @Column(name = "planned_start_date")
+    private LocalDateTime plannedStartDate;
 
     @Column(name = "estimated_completion_date")
     private LocalDateTime estimatedCompletionDate;
@@ -71,8 +71,8 @@ public class ProjectStepAssignment extends BaseEntity {
     @Column(name = "hourly_rate")
     private java.math.BigDecimal hourlyRate;
 
-    @Column(name = "estimated_hours")
-    private Integer estimatedHours;
+    @Column(name = "estimated_days")
+    private Integer estimatedDays;
 
     @Column(name = "total_hours")
     private Integer totalHours;

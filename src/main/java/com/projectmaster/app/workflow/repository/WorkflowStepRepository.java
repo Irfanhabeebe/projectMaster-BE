@@ -18,13 +18,13 @@ public interface WorkflowStepRepository extends JpaRepository<WorkflowStep, UUID
     List<WorkflowStep> findByWorkflowTaskIdOrderByOrderIndex(UUID workflowTaskId);
     
     /**
-     * Find steps by workflow stage ID and estimated hours range
+     * Find steps by workflow stage ID and estimated days range
      */
     @Query("SELECT ws FROM WorkflowStep ws WHERE ws.workflowTask.id = :taskId AND " +
-           "ws.estimatedHours BETWEEN :minHours AND :maxHours ORDER BY ws.orderIndex")
-    List<WorkflowStep> findByTaskIdAndEstimatedHoursRange(@Param("taskId") UUID taskId,
-                                                          @Param("minHours") Integer minHours,
-                                                          @Param("maxHours") Integer maxHours);
+           "ws.estimatedDays BETWEEN :minDays AND :maxDays ORDER BY ws.orderIndex")
+    List<WorkflowStep> findByTaskIdAndEstimatedDaysRange(@Param("taskId") UUID taskId,
+                                                         @Param("minDays") Integer minDays,
+                                                         @Param("maxDays") Integer maxDays);
     
     /**
      * Find steps with required skills

@@ -8,10 +8,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -23,11 +23,13 @@ public class WorkflowCopyService {
     private final StandardWorkflowStageRepository standardWorkflowStageRepository;
     private final StandardWorkflowTaskRepository standardWorkflowTaskRepository;
     private final StandardWorkflowStepRepository standardWorkflowStepRepository;
+    private final StandardWorkflowDependencyRepository standardWorkflowDependencyRepository;
     
     private final WorkflowTemplateRepository workflowTemplateRepository;
     private final WorkflowStageRepository workflowStageRepository;
     private final WorkflowTaskRepository workflowTaskRepository;
     private final WorkflowStepRepository workflowStepRepository;
+    private final WorkflowDependencyRepository workflowDependencyRepository;
 
     /**
      * Copy all active standard workflows to a company
@@ -110,6 +112,9 @@ public class WorkflowCopyService {
             }
         }
         
+        // Copy dependencies from standard workflow to company workflow
+        copyStandardDependenciesToWorkflow(standardTemplate.getId(), savedTemplate.getId(), stageMapping);
+        
         log.debug("Successfully copied workflow template: {} with {} stages to company: {}", 
                  standardTemplate.getName(), standardStages.size(), company.getName());
     }
@@ -127,6 +132,7 @@ public class WorkflowCopyService {
                 .requiredApprovals(standardStage.getRequiredApprovals())
                 .estimatedDurationDays(standardStage.getEstimatedDurationDays())
                 .version(1)
+                .standardWorkflowStageId(standardStage.getId()) // Store reference to standard stage
                 .build();
         
         return workflowStageRepository.save(workflowStage);
@@ -141,10 +147,11 @@ public class WorkflowCopyService {
                 .name(standardTask.getName())
                 .description(standardTask.getDescription())
                 .orderIndex(standardTask.getOrderIndex())
-                .estimatedHours(standardTask.getEstimatedHours())
+                .estimatedDays(standardTask.getEstimatedDays())
                 .requiredSkills(standardTask.getRequiredSkills())
                 .requirements(standardTask.getRequirements())
                 .version(1)
+                .standardWorkflowTaskId(standardTask.getId()) // Store reference to standard task
                 .build();
         
         return workflowTaskRepository.save(workflowTask);
@@ -159,11 +166,12 @@ public class WorkflowCopyService {
                 .name(standardStep.getName())
                 .description(standardStep.getDescription())
                 .orderIndex(standardStep.getOrderIndex())
-                .estimatedHours(standardStep.getEstimatedHours())
+                .estimatedDays(standardStep.getEstimatedDays())
                 .requiredSkills(standardStep.getRequiredSkills())
                 .requirements(standardStep.getRequirements())
                 .specialty(standardStep.getSpecialty()) // Copy the specialty
                 .version(1)
+                .standardWorkflowStepId(standardStep.getId()) // Store reference to standard step
                 .build();
         
         return workflowStepRepository.save(workflowStep);
@@ -208,5 +216,130 @@ public class WorkflowCopyService {
         
         log.info("Successfully copied {} default standard workflow templates to company: {}", 
                 defaultTemplates.size(), company.getName());
+    }
+    
+    /**
+     * Copy dependencies from standard workflow to company workflow
+     */
+    private void copyStandardDependenciesToWorkflow(UUID standardTemplateId, UUID workflowTemplateId, 
+                                                   Map<Long, WorkflowStage> stageMapping) {
+        
+        List<StandardWorkflowDependency> standardDeps = standardWorkflowDependencyRepository
+            .findByStandardWorkflowTemplateId(standardTemplateId);
+        
+        if (standardDeps.isEmpty()) {
+            log.debug("No standard dependencies found for template: {}", standardTemplateId);
+            return;
+        }
+        
+        // Create comprehensive entity mappings using the standard entity references
+        Map<UUID, UUID> standardToWorkflowEntityMapping = createStandardToWorkflowEntityMapping(workflowTemplateId);
+        
+        int copiedCount = 0;
+        for (StandardWorkflowDependency standardDep : standardDeps) {
+            try {
+                WorkflowDependency workflowDep = createWorkflowDependency(standardDep, workflowTemplateId, standardToWorkflowEntityMapping);
+                if (workflowDep != null) {
+                    workflowDependencyRepository.save(workflowDep);
+                    copiedCount++;
+                }
+            } catch (Exception e) {
+                log.warn("Failed to copy standard dependency {}: {}", standardDep.getId(), e.getMessage());
+            }
+        }
+        
+        log.info("Copied {} out of {} dependencies from standard template {} to workflow template {}", 
+                copiedCount, standardDeps.size(), standardTemplateId, workflowTemplateId);
+    }
+    
+    /**
+     * Create a comprehensive mapping from standard entity IDs to workflow entity IDs
+     */
+    private Map<UUID, UUID> createStandardToWorkflowEntityMapping(UUID workflowTemplateId) {
+        Map<UUID, UUID> mapping = new HashMap<>();
+        
+        // Map stages
+        List<WorkflowStage> workflowStages = workflowStageRepository
+                .findByWorkflowTemplateIdOrderByOrderIndex(workflowTemplateId);
+        for (WorkflowStage workflowStage : workflowStages) {
+            if (workflowStage.getStandardWorkflowStageId() != null) {
+                mapping.put(workflowStage.getStandardWorkflowStageId(), workflowStage.getId());
+            }
+        }
+        
+        // Map tasks
+        List<WorkflowTask> workflowTasks = workflowTaskRepository
+                .findByWorkflowTemplateIdOrderByStageAndTaskOrder(workflowTemplateId);
+        for (WorkflowTask workflowTask : workflowTasks) {
+            if (workflowTask.getStandardWorkflowTaskId() != null) {
+                mapping.put(workflowTask.getStandardWorkflowTaskId(), workflowTask.getId());
+            }
+        }
+        
+        // Map steps
+        List<WorkflowStep> workflowSteps = workflowStepRepository
+                .findByWorkflowTemplateId(workflowTemplateId);
+        for (WorkflowStep workflowStep : workflowSteps) {
+            if (workflowStep.getStandardWorkflowStepId() != null) {
+                mapping.put(workflowStep.getStandardWorkflowStepId(), workflowStep.getId());
+            }
+        }
+        
+        log.debug("Created standard to workflow entity mapping with {} entries for template {}", 
+                mapping.size(), workflowTemplateId);
+        return mapping;
+    }
+    
+    /**
+     * Create a workflow dependency from a standard dependency
+     */
+    private WorkflowDependency createWorkflowDependency(StandardWorkflowDependency standardDep, 
+                                                       UUID workflowTemplateId,
+                                                       Map<UUID, UUID> standardToWorkflowEntityMapping) {
+        
+        // Map standard entity IDs to workflow entity IDs using the comprehensive mapping
+        UUID dependentWorkflowEntityId = standardToWorkflowEntityMapping.get(standardDep.getDependentEntityId());
+        UUID dependsOnWorkflowEntityId = standardToWorkflowEntityMapping.get(standardDep.getDependsOnEntityId());
+        
+        if (dependentWorkflowEntityId == null || dependsOnWorkflowEntityId == null) {
+            log.warn("Could not map standard entities to workflow entities for dependency {}: dependent={}, dependsOn={}", 
+                    standardDep.getId(), standardDep.getDependentEntityId(), standardDep.getDependsOnEntityId());
+            return null;
+        }
+        
+        // Convert standard dependency entity types to workflow dependency entity types
+        com.projectmaster.app.workflow.entity.DependencyEntityType dependentType = 
+            convertStandardToWorkflowEntityType(standardDep.getDependentEntityType());
+        com.projectmaster.app.workflow.entity.DependencyEntityType dependsOnType = 
+            convertStandardToWorkflowEntityType(standardDep.getDependsOnEntityType());
+        
+        return WorkflowDependency.builder()
+            .workflowTemplateId(workflowTemplateId)
+            .dependentEntityType(dependentType)
+            .dependentEntityId(dependentWorkflowEntityId)
+            .dependsOnEntityType(dependsOnType)
+            .dependsOnEntityId(dependsOnWorkflowEntityId)
+            .dependencyType(standardDep.getDependencyType())
+            .lagDays(standardDep.getLagDays())
+            .build();
+    }
+    
+    
+    /**
+     * Convert standard dependency entity type to workflow dependency entity type
+     */
+    private com.projectmaster.app.workflow.entity.DependencyEntityType convertStandardToWorkflowEntityType(
+            com.projectmaster.app.workflow.entity.StandardDependencyEntityType standardType) {
+        
+        switch (standardType) {
+            case STAGE:
+                return com.projectmaster.app.workflow.entity.DependencyEntityType.TASK; // Map stage to task level
+            case TASK:
+                return com.projectmaster.app.workflow.entity.DependencyEntityType.TASK;
+            case STEP:
+                return com.projectmaster.app.workflow.entity.DependencyEntityType.STEP;
+            default:
+                throw new IllegalArgumentException("Unknown standard dependency entity type: " + standardType);
+        }
     }
 }
