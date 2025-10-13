@@ -1,7 +1,6 @@
 package com.projectmaster.app.project.entity;
 
 import com.projectmaster.app.common.entity.BaseEntity;
-import com.projectmaster.app.common.enums.StageStatus;
 import com.projectmaster.app.common.converter.JsonbConverter;
 import com.projectmaster.app.workflow.entity.WorkflowStep;
 import com.projectmaster.app.workflow.entity.Specialty;
@@ -26,7 +25,7 @@ public class ProjectStep extends BaseEntity {
     private ProjectTask projectTask;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "workflow_step_id", nullable = false)
+    @JoinColumn(name = "workflow_step_id")
     private WorkflowStep workflowStep;
 
     @Column(name = "name", nullable = false)
@@ -59,21 +58,8 @@ public class ProjectStep extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "order_index", nullable = false)
-    private Integer orderIndex;
-
     @Column(name = "estimated_days")
     private Integer estimatedDays;
-
-    @Column(name = "required_skills")
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Convert(converter = JsonbConverter.class)
-    private String requiredSkills;
-
-    @Column(name = "requirements")
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Convert(converter = JsonbConverter.class)
-    private String requirements;
 
     // Version tracking
     @Column(name = "workflow_step_version")
@@ -82,6 +68,10 @@ public class ProjectStep extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "specialty_id", nullable = false)
     private Specialty specialty;
+    
+    @Builder.Default
+    @Column(name = "adhoc_step_flag", nullable = false)
+    private Boolean adhocStepFlag = false;
     
     /**
      * Step execution status - tracks the actual work progress

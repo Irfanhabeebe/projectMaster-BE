@@ -97,7 +97,6 @@ class ProjectServiceTest {
                 .name("Test Task")
                 .description("Test Task Description")
                 .status(StageStatus.NOT_STARTED)
-                .orderIndex(1)
                 .projectStage(testStage)
                 .build();
         testTask.setId(UUID.randomUUID());
@@ -106,7 +105,6 @@ class ProjectServiceTest {
                 .name("Test Step")
                 .description("Test Step Description")
                 .status(com.projectmaster.app.project.entity.ProjectStep.StepExecutionStatus.NOT_STARTED)
-                .orderIndex(1)
                 .projectTask(testTask)
                 .build();
         testStep.setId(UUID.randomUUID());
@@ -119,9 +117,9 @@ class ProjectServiceTest {
         when(projectRepository.findById(testProject.getId())).thenReturn(Optional.of(testProject));
         when(projectStageRepository.findByProjectIdOrderByWorkflowStageOrderIndex(testProject.getId()))
                 .thenReturn(List.of(testStage));
-        when(projectTaskRepository.findByProjectStageIdOrderByOrderIndex(testStage.getId()))
+        when(projectTaskRepository.findByProjectStageIdOrderByCreatedAt(testStage.getId()))
                 .thenReturn(List.of(testTask));
-        when(projectStepRepository.findByProjectTaskIdOrderByOrderIndex(testTask.getId()))
+        when(projectStepRepository.findByProjectTaskIdOrderByCreatedAt(testTask.getId()))
                 .thenReturn(List.of(testStep));
         when(projectStepAssignmentService.getAssignmentsByProjectStep(testStep.getId()))
                 .thenReturn(List.of());
@@ -166,9 +164,9 @@ class ProjectServiceTest {
         when(projectRepository.findById(testProject.getId())).thenReturn(Optional.of(testProject));
         when(projectStageRepository.findByProjectIdOrderByWorkflowStageOrderIndex(testProject.getId()))
                 .thenReturn(List.of(testStage));
-        when(projectTaskRepository.findByProjectStageIdOrderByOrderIndex(testStage.getId()))
+        when(projectTaskRepository.findByProjectStageIdOrderByCreatedAt(testStage.getId()))
                 .thenReturn(List.of(testTask));
-        when(projectStepRepository.findByProjectTaskIdOrderByOrderIndex(testTask.getId()))
+        when(projectStepRepository.findByProjectTaskIdOrderByCreatedAt(testTask.getId()))
                 .thenReturn(List.of(testStep));
         when(projectStepAssignmentService.getAssignmentsByProjectStep(testStep.getId()))
                 .thenReturn(List.of());

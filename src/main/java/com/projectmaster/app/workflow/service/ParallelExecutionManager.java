@@ -8,10 +8,8 @@ import com.projectmaster.app.workflow.dto.ParallelExecutionResult;
 import com.projectmaster.app.workflow.dto.ParallelOpportunity;
 import com.projectmaster.app.project.entity.ProjectTask;
 import com.projectmaster.app.project.entity.ProjectStep;
-import com.projectmaster.app.project.entity.AdhocTask;
 import com.projectmaster.app.project.repository.ProjectTaskRepository;
 import com.projectmaster.app.project.repository.ProjectStepRepository;
-import com.projectmaster.app.project.repository.AdhocTaskRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,7 +30,6 @@ public class ParallelExecutionManager {
     private final ProjectDependencyRepository projectDependencyRepository;
     private final ProjectTaskRepository projectTaskRepository;
     private final ProjectStepRepository projectStepRepository;
-    private final AdhocTaskRepository adhocTaskRepository;
     
     /**
      * Execute all entities that can run in parallel (enhanced version)
@@ -43,7 +40,6 @@ public class ParallelExecutionManager {
         
         List<UUID> startedTasks = new ArrayList<>();
         List<UUID> startedSteps = new ArrayList<>();
-        List<UUID> startedAdhocTasks = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         
         // Start all parallel tasks
@@ -74,28 +70,14 @@ public class ParallelExecutionManager {
             }
         }
         
-        // Start all parallel ad-hoc tasks
-        List<UUID> parallelAdhocTasks = advancedDependencyResolver.getParallelExecutableEntities(
-            projectId, DependencyEntityType.ADHOC_TASK);
-        for (UUID adhocTaskId : parallelAdhocTasks) {
-            try {
-                updateEntityStatusToInProgress(adhocTaskId, DependencyEntityType.ADHOC_TASK);
-                startedAdhocTasks.add(adhocTaskId);
-                log.info("Started parallel ad-hoc task {}", adhocTaskId);
-            } catch (Exception e) {
-                warnings.add("Failed to start ad-hoc task " + adhocTaskId + ": " + e.getMessage());
-                log.error("Failed to start parallel ad-hoc task {}: {}", adhocTaskId, e.getMessage());
-            }
-        }
-        
-        int totalStarted = startedTasks.size() + startedSteps.size() + startedAdhocTasks.size();
-        String summary = String.format("Started %d tasks, %d steps, and %d ad-hoc tasks in parallel", 
-            startedTasks.size(), startedSteps.size(), startedAdhocTasks.size());
+        int totalStarted = startedTasks.size() + startedSteps.size();
+        String summary = String.format("Started %d tasks and %d steps in parallel", 
+            startedTasks.size(), startedSteps.size());
         
         return ParallelExecutionResult.builder()
             .startedTasks(startedTasks)
             .startedSteps(startedSteps)
-            .startedAdhocTasks(startedAdhocTasks)
+            .startedAdhocTasks(new ArrayList<>()) // Empty list for backward compatibility
             .executionTime(java.time.Instant.now())
             .totalEntitiesStarted(totalStarted)
             .executionSummary(summary)
@@ -181,7 +163,7 @@ public class ParallelExecutionManager {
     }
     
     /**
-     * Update entity status to IN_PROGRESS
+     * Update entity status to READY_TO_START (for steps) or IN_PROGRESS (for tasks)
      */
     private void updateEntityStatusToInProgress(UUID entityId, DependencyEntityType entityType) {
         switch (entityType) {
@@ -191,8 +173,9 @@ public class ParallelExecutionManager {
             case STEP:
                 updateProjectStepStatus(entityId);
                 break;
-            case ADHOC_TASK:
-                updateAdhocTaskStatus(entityId);
+            case STAGE:
+                // Stages are handled by StateManager, not here
+                log.debug("Stage completion handled by StateManager, skipping dependency update");
                 break;
         }
     }
@@ -214,35 +197,20 @@ public class ParallelExecutionManager {
     }
     
     /**
-     * Update project step status to IN_PROGRESS
+     * Update project step status to READY_TO_START (not IN_PROGRESS)
      */
     private void updateProjectStepStatus(UUID stepId) {
         ProjectStep step = projectStepRepository.findById(stepId)
             .orElseThrow(() -> new RuntimeException("Project step not found: " + stepId));
         
-        step.setStatus(com.projectmaster.app.project.entity.ProjectStep.StepExecutionStatus.IN_PROGRESS);
-        if (step.getActualStartDate() == null) {
-            step.setActualStartDate(java.time.LocalDate.now());
+        // Only update if step is NOT_STARTED
+        if (step.getStatus() == ProjectStep.StepExecutionStatus.NOT_STARTED) {
+            step.setStatus(ProjectStep.StepExecutionStatus.READY_TO_START);
+            projectStepRepository.save(step);
+            log.info("Updated project step {} status to READY_TO_START", stepId);
+        } else {
+            log.debug("Project step {} is already in status {}, not updating", stepId, step.getStatus());
         }
-        projectStepRepository.save(step);
-        
-        log.info("Updated project step {} status to IN_PROGRESS", stepId);
-    }
-    
-    /**
-     * Update ad-hoc task status to IN_PROGRESS
-     */
-    private void updateAdhocTaskStatus(UUID taskId) {
-        AdhocTask task = adhocTaskRepository.findById(taskId)
-            .orElseThrow(() -> new RuntimeException("Ad-hoc task not found: " + taskId));
-        
-        task.setStatus(com.projectmaster.app.common.enums.StageStatus.IN_PROGRESS);
-        if (task.getActualStartDate() == null) {
-            task.setActualStartDate(java.time.LocalDate.now());
-        }
-        adhocTaskRepository.save(task);
-        
-        log.info("Updated ad-hoc task {} status to IN_PROGRESS", taskId);
     }
     
     /**

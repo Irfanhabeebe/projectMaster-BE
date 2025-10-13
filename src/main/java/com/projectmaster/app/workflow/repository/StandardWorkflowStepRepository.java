@@ -12,12 +12,12 @@ import java.util.UUID;
 @Repository
 public interface StandardWorkflowStepRepository extends JpaRepository<StandardWorkflowStep, UUID> {
 
-    @Query("SELECT sws FROM StandardWorkflowStep sws WHERE sws.standardWorkflowTask.id = :standardWorkflowTaskId ORDER BY sws.orderIndex")
+    @Query("SELECT sws FROM StandardWorkflowStep sws WHERE sws.standardWorkflowTask.id = :standardWorkflowTaskId ORDER BY sws.createdAt")
     List<StandardWorkflowStep> findByStandardWorkflowTaskIdOrderByOrderIndex(@Param("standardWorkflowTaskId") UUID standardWorkflowTaskId);
 
-    @Query("SELECT sws FROM StandardWorkflowStep sws WHERE sws.standardWorkflowTask.standardWorkflowStage.id = :standardWorkflowStageId ORDER BY sws.standardWorkflowTask.orderIndex, sws.orderIndex")
+    @Query("SELECT sws FROM StandardWorkflowStep sws WHERE sws.standardWorkflowTask.standardWorkflowStage.id = :standardWorkflowStageId ORDER BY sws.standardWorkflowTask.createdAt, sws.createdAt")
     List<StandardWorkflowStep> findByStandardWorkflowStageIdOrderByTaskAndStepOrder(@Param("standardWorkflowStageId") UUID standardWorkflowStageId);
 
-    @Query("SELECT sws FROM StandardWorkflowStep sws WHERE sws.standardWorkflowTask.standardWorkflowStage.standardWorkflowTemplate.id = :standardWorkflowTemplateId ORDER BY sws.standardWorkflowTask.standardWorkflowStage.orderIndex, sws.standardWorkflowTask.orderIndex, sws.orderIndex")
+    @Query("SELECT sws FROM StandardWorkflowStep sws WHERE sws.standardWorkflowTask.standardWorkflowStage.standardWorkflowTemplate.id = :standardWorkflowTemplateId ORDER BY sws.standardWorkflowTask.standardWorkflowStage.createdAt, sws.standardWorkflowTask.createdAt, sws.createdAt")
     List<StandardWorkflowStep> findByStandardWorkflowTemplateIdOrderByStageAndTaskAndStepOrder(@Param("standardWorkflowTemplateId") UUID standardWorkflowTemplateId);
 }

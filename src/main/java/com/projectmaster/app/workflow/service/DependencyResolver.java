@@ -6,10 +6,8 @@ import com.projectmaster.app.workflow.entity.DependencyStatus;
 import com.projectmaster.app.workflow.repository.ProjectDependencyRepository;
 import com.projectmaster.app.project.entity.ProjectTask;
 import com.projectmaster.app.project.entity.ProjectStep;
-import com.projectmaster.app.project.entity.AdhocTask;
 import com.projectmaster.app.project.repository.ProjectTaskRepository;
 import com.projectmaster.app.project.repository.ProjectStepRepository;
-import com.projectmaster.app.project.repository.AdhocTaskRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,7 +25,6 @@ public class DependencyResolver {
     private final ProjectDependencyRepository projectDependencyRepository;
     private final ProjectTaskRepository projectTaskRepository;
     private final ProjectStepRepository projectStepRepository;
-    private final AdhocTaskRepository adhocTaskRepository;
     
     /**
      * Check if an entity can start based on its dependencies
@@ -99,7 +96,7 @@ public class DependencyResolver {
     }
     
     /**
-     * Update the status of dependent entity to IN_PROGRESS
+     * Update the status of dependent entity to READY_TO_START (for steps) or IN_PROGRESS (for tasks)
      */
     private void updateDependentEntityStatus(ProjectDependency dependency) {
         switch (dependency.getDependentEntityType()) {
@@ -109,8 +106,9 @@ public class DependencyResolver {
             case STEP:
                 updateProjectStepStatus(dependency.getDependentEntityId());
                 break;
-            case ADHOC_TASK:
-                updateAdhocTaskStatus(dependency.getDependentEntityId());
+            case STAGE:
+                // Stages are handled by StateManager, not here
+                log.debug("Stage completion handled by StateManager, skipping dependency update");
                 break;
         }
     }
@@ -132,35 +130,20 @@ public class DependencyResolver {
     }
     
     /**
-     * Update project step status to IN_PROGRESS
+     * Update project step status to READY_TO_START (not IN_PROGRESS)
      */
     private void updateProjectStepStatus(UUID stepId) {
         ProjectStep step = projectStepRepository.findById(stepId)
             .orElseThrow(() -> new RuntimeException("Project step not found: " + stepId));
         
-        step.setStatus(com.projectmaster.app.project.entity.ProjectStep.StepExecutionStatus.IN_PROGRESS);
-        if (step.getActualStartDate() == null) {
-            step.setActualStartDate(java.time.LocalDate.now());
+        // Only update if step is NOT_STARTED
+        if (step.getStatus() == ProjectStep.StepExecutionStatus.NOT_STARTED) {
+            step.setStatus(ProjectStep.StepExecutionStatus.READY_TO_START);
+            projectStepRepository.save(step);
+            log.info("Updated project step {} status to READY_TO_START", stepId);
+        } else {
+            log.debug("Project step {} is already in status {}, not updating", stepId, step.getStatus());
         }
-        projectStepRepository.save(step);
-        
-        log.info("Updated project step {} status to IN_PROGRESS", stepId);
-    }
-    
-    /**
-     * Update ad-hoc task status to IN_PROGRESS
-     */
-    private void updateAdhocTaskStatus(UUID taskId) {
-        AdhocTask task = adhocTaskRepository.findById(taskId)
-            .orElseThrow(() -> new RuntimeException("Ad-hoc task not found: " + taskId));
-        
-        task.setStatus(com.projectmaster.app.common.enums.StageStatus.IN_PROGRESS);
-        if (task.getActualStartDate() == null) {
-            task.setActualStartDate(java.time.LocalDate.now());
-        }
-        adhocTaskRepository.save(task);
-        
-        log.info("Updated ad-hoc task {} status to IN_PROGRESS", taskId);
     }
     
     /**

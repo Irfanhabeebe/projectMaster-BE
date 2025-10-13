@@ -12,18 +12,18 @@ import java.util.UUID;
 @Repository
 public interface ProjectStepRepository extends JpaRepository<ProjectStep, UUID> {
 
-    @Query("SELECT ps FROM ProjectStep ps WHERE ps.projectTask.id = :projectTaskId ORDER BY ps.orderIndex")
-    List<ProjectStep> findByProjectTaskIdOrderByOrderIndex(@Param("projectTaskId") UUID projectTaskId);
+    @Query("SELECT ps FROM ProjectStep ps WHERE ps.projectTask.id = :projectTaskId ORDER BY ps.createdAt")
+    List<ProjectStep> findByProjectTaskIdOrderByCreatedAt(@Param("projectTaskId") UUID projectTaskId);
 
-    @Query("SELECT ps FROM ProjectStep ps WHERE ps.projectTask.projectStage.id = :projectStageId ORDER BY ps.projectTask.orderIndex, ps.orderIndex")
+    @Query("SELECT ps FROM ProjectStep ps WHERE ps.projectTask.projectStage.id = :projectStageId ORDER BY ps.projectTask.createdAt, ps.createdAt")
     List<ProjectStep> findByProjectStageIdOrderByTaskAndStepOrder(@Param("projectStageId") UUID projectStageId);
 
-    @Query("SELECT ps FROM ProjectStep ps WHERE ps.projectTask.projectStage.project.id = :projectId ORDER BY ps.projectTask.projectStage.orderIndex, ps.projectTask.orderIndex, ps.orderIndex")
+    @Query("SELECT ps FROM ProjectStep ps WHERE ps.projectTask.projectStage.project.id = :projectId ORDER BY ps.projectTask.projectStage.createdAt, ps.projectTask.createdAt, ps.createdAt")
     List<ProjectStep> findByProjectIdOrderByStageAndTaskAndStepOrder(@Param("projectId") UUID projectId);
 
     @Query("SELECT ps FROM ProjectStep ps WHERE ps.projectTask.projectStage.project.id = :projectId")
     List<ProjectStep> findByProjectTasksProjectStagesProjectId(@Param("projectId") UUID projectId);
 
-    @Query("SELECT ps FROM ProjectStep ps WHERE ps.projectTask.id = :projectTaskId ORDER BY ps.plannedStartDate ASC NULLS LAST, ps.orderIndex ASC")
+    @Query("SELECT ps FROM ProjectStep ps WHERE ps.projectTask.id = :projectTaskId ORDER BY ps.plannedStartDate ASC NULLS LAST, ps.createdAt ASC")
     List<ProjectStep> findByProjectTaskIdOrderByPlannedStartDate(@Param("projectTaskId") UUID projectTaskId);
 }

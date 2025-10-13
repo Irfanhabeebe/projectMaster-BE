@@ -6,11 +6,24 @@ import com.projectmaster.app.project.repository.ProjectStepAssignmentRepository;
 import com.projectmaster.app.project.repository.ProjectStepRepository;
 import com.projectmaster.app.user.entity.User;
 import com.projectmaster.app.user.repository.UserRepository;
+import com.projectmaster.app.workflow.dto.CompleteStepRequest;
 import com.projectmaster.app.workflow.dto.WorkflowExecutionRequest;
 import com.projectmaster.app.workflow.dto.WorkflowExecutionResult;
 import com.projectmaster.app.workflow.dto.WorkflowTemplateDto;
+import com.projectmaster.app.workflow.dto.WorkflowTemplateDetailResponse;
 import com.projectmaster.app.workflow.entity.WorkflowTemplate;
+import com.projectmaster.app.workflow.entity.WorkflowStage;
+import com.projectmaster.app.workflow.entity.WorkflowTask;
+import com.projectmaster.app.workflow.entity.WorkflowStep;
+import com.projectmaster.app.workflow.entity.WorkflowDependency;
+import com.projectmaster.app.workflow.entity.WorkflowStepRequirement;
+import com.projectmaster.app.workflow.entity.DependencyEntityType;
 import com.projectmaster.app.workflow.repository.WorkflowTemplateRepository;
+import com.projectmaster.app.workflow.repository.WorkflowStageRepository;
+import com.projectmaster.app.workflow.repository.WorkflowTaskRepository;
+import com.projectmaster.app.workflow.repository.WorkflowStepRepository;
+import com.projectmaster.app.workflow.repository.WorkflowDependencyRepository;
+import com.projectmaster.app.workflow.repository.WorkflowStepRequirementRepository;
 import com.projectmaster.app.workflow.engine.WorkflowEngine;
 import com.projectmaster.app.common.enums.UserRole;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -30,6 +44,11 @@ public class WorkflowService {
     
     private final WorkflowEngine workflowEngine;
     private final WorkflowTemplateRepository workflowTemplateRepository;
+    private final WorkflowStageRepository workflowStageRepository;
+    private final WorkflowTaskRepository workflowTaskRepository;
+    private final WorkflowStepRepository workflowStepRepository;
+    private final WorkflowDependencyRepository workflowDependencyRepository;
+    private final WorkflowStepRequirementRepository workflowStepRequirementRepository;
     private final ProjectStepRepository projectStepRepository;
     private final ProjectStepAssignmentRepository projectStepAssignmentRepository;
     private final UserRepository userRepository;
@@ -164,8 +183,8 @@ public class WorkflowService {
     /**
      * Complete a project step
      */
-    public WorkflowExecutionResult completeStep(UUID projectId, UUID stepId, UUID userId) {
-        WorkflowExecutionRequest request = WorkflowExecutionRequest.builder()
+    public WorkflowExecutionResult completeStep(UUID projectId, UUID stepId, UUID userId, CompleteStepRequest request) {
+        WorkflowExecutionRequest workflowRequest = WorkflowExecutionRequest.builder()
                 .projectId(projectId)
                 .stepId(stepId)
                 .userId(userId)
@@ -173,9 +192,15 @@ public class WorkflowService {
                         .type(com.projectmaster.app.workflow.enums.WorkflowActionType.COMPLETE_STEP)
                         .targetId(stepId)
                         .build())
+                .completionData(Map.of(
+                    "completionDate", request.getCompletionDate(),
+                    "completionNotes", request.getCompletionNotes() != null ? request.getCompletionNotes() : "",
+                    "qualityCheckPassed", request.getQualityCheckPassed() != null ? request.getQualityCheckPassed() : true,
+                    "completionPercentage", request.getCompletionPercentage() != null ? request.getCompletionPercentage() : 100
+                ))
                 .build();
         
-        return executeWorkflow(request);
+        return executeWorkflow(workflowRequest);
     }
     
     /**
@@ -224,6 +249,185 @@ public class WorkflowService {
         return templates.stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
+    }
+    
+    /**
+     * Get detailed workflow template with complete structure
+     */
+    @Transactional(readOnly = true)
+    public WorkflowTemplateDetailResponse getWorkflowTemplateDetail(UUID templateId) {
+        log.debug("Getting detailed workflow template: {}", templateId);
+        
+        WorkflowTemplate template = workflowTemplateRepository.findById(templateId)
+                .orElseThrow(() -> new RuntimeException("Workflow template not found: " + templateId));
+        
+        return convertToDetailResponse(template);
+    }
+    
+    /**
+     * Convert WorkflowTemplate entity to detailed DTO
+     */
+    private WorkflowTemplateDetailResponse convertToDetailResponse(WorkflowTemplate template) {
+        List<WorkflowTemplateDetailResponse.WorkflowStageDetailResponse> stageResponses = 
+                template.getStages().stream()
+                        .map(this::convertToStageDetailResponse)
+                        .toList();
+        
+        return WorkflowTemplateDetailResponse.builder()
+                .id(template.getId())
+                .companyId(template.getCompany().getId())
+                .companyName(template.getCompany().getName())
+                .name(template.getName())
+                .description(template.getDescription())
+                .category(template.getCategory())
+                .active(template.getActive())
+                .isDefault(template.getIsDefault())
+                .version(template.getVersion())
+                .createdAt(template.getCreatedAt())
+                .updatedAt(template.getUpdatedAt())
+                .stages(stageResponses)
+                .build();
+    }
+    
+    /**
+     * Convert WorkflowStage entity to detailed DTO
+     */
+    private WorkflowTemplateDetailResponse.WorkflowStageDetailResponse convertToStageDetailResponse(WorkflowStage stage) {
+        List<WorkflowTemplateDetailResponse.WorkflowTaskDetailResponse> taskResponses = 
+                stage.getTasks().stream()
+                        .map(this::convertToTaskDetailResponse)
+                        .toList();
+        
+        return WorkflowTemplateDetailResponse.WorkflowStageDetailResponse.builder()
+                .id(stage.getId())
+                .name(stage.getName())
+                .description(stage.getDescription())
+                .orderIndex(stage.getOrderIndex())
+                .parallelExecution(stage.getParallelExecution())
+                .requiredApprovals(stage.getRequiredApprovals())
+                .estimatedDurationDays(stage.getEstimatedDurationDays())
+                .version(stage.getVersion())
+                .createdAt(stage.getCreatedAt())
+                .updatedAt(stage.getUpdatedAt())
+                .tasks(taskResponses)
+                .build();
+    }
+    
+    /**
+     * Convert WorkflowTask entity to detailed DTO
+     */
+    private WorkflowTemplateDetailResponse.WorkflowTaskDetailResponse convertToTaskDetailResponse(WorkflowTask task) {
+        List<WorkflowTemplateDetailResponse.WorkflowStepDetailResponse> stepResponses = 
+                task.getSteps().stream()
+                        .map(this::convertToStepDetailResponse)
+                        .toList();
+        
+        // Get task dependencies
+        List<WorkflowDependency> taskDependencies = workflowDependencyRepository
+                .findByDependentEntityTypeAndDependentEntityId(DependencyEntityType.TASK, task.getId());
+        
+        List<WorkflowTemplateDetailResponse.WorkflowDependencyDetailResponse> dependencyResponses = 
+                taskDependencies.stream()
+                        .map(this::convertToDependencyDetailResponse)
+                        .toList();
+        
+        return WorkflowTemplateDetailResponse.WorkflowTaskDetailResponse.builder()
+                .id(task.getId())
+                .name(task.getName())
+                .description(task.getDescription())
+                .estimatedDays(task.getEstimatedDays())
+                .version(task.getVersion())
+                .createdAt(task.getCreatedAt())
+                .updatedAt(task.getUpdatedAt())
+                .steps(stepResponses)
+                .dependencies(dependencyResponses)
+                .build();
+    }
+    
+    /**
+     * Convert WorkflowStep entity to detailed DTO
+     */
+    private WorkflowTemplateDetailResponse.WorkflowStepDetailResponse convertToStepDetailResponse(WorkflowStep step) {
+        // Get step requirements
+        List<WorkflowStepRequirement> stepRequirements = workflowStepRequirementRepository
+                .findByWorkflowStepIdOrderByDisplayOrder(step.getId());
+        
+        List<WorkflowTemplateDetailResponse.WorkflowStepRequirementDetailResponse> requirementResponses = 
+                stepRequirements.stream()
+                        .map(this::convertToStepRequirementDetailResponse)
+                        .toList();
+        
+        // Get step dependencies
+        List<WorkflowDependency> dependencies = workflowDependencyRepository
+                .findByDependentEntityTypeAndDependentEntityId(DependencyEntityType.STEP, step.getId());
+        
+        List<WorkflowTemplateDetailResponse.WorkflowDependencyDetailResponse> dependencyResponses = 
+                dependencies.stream()
+                        .map(this::convertToDependencyDetailResponse)
+                        .toList();
+        
+        return WorkflowTemplateDetailResponse.WorkflowStepDetailResponse.builder()
+                .id(step.getId())
+                .name(step.getName())
+                .description(step.getDescription())
+                .estimatedDays(step.getEstimatedDays())
+                .specialtyId(step.getSpecialty() != null ? step.getSpecialty().getId() : null)
+                .specialtyName(step.getSpecialty() != null ? step.getSpecialty().getSpecialtyName() : null)
+                .specialtyType(step.getSpecialty() != null ? step.getSpecialty().getSpecialtyType() : null)
+                .version(step.getVersion())
+                .createdAt(step.getCreatedAt())
+                .updatedAt(step.getUpdatedAt())
+                .stepRequirements(requirementResponses)
+                .dependencies(dependencyResponses)
+                .build();
+    }
+    
+    /**
+     * Convert WorkflowStepRequirement entity to detailed DTO
+     */
+    private WorkflowTemplateDetailResponse.WorkflowStepRequirementDetailResponse convertToStepRequirementDetailResponse(WorkflowStepRequirement requirement) {
+        return WorkflowTemplateDetailResponse.WorkflowStepRequirementDetailResponse.builder()
+                .id(requirement.getId())
+                .itemName(requirement.getItemName())
+                .itemDescription(requirement.getItemDescription())
+                .displayOrder(requirement.getDisplayOrder())
+                .categoryId(requirement.getCategory() != null ? requirement.getCategory().getId() : null)
+                .categoryName(requirement.getCategory() != null ? requirement.getCategory().getName() : null)
+                .categoryGroup(requirement.getCategory() != null ? requirement.getCategory().getCategoryGroup() : null)
+                .supplierId(requirement.getSupplier() != null ? requirement.getSupplier().getId() : null)
+                .supplierName(requirement.getSupplier() != null ? requirement.getSupplier().getName() : null)
+                .brand(requirement.getBrand())
+                .model(requirement.getModel())
+                .defaultQuantity(requirement.getDefaultQuantity() != null ? requirement.getDefaultQuantity().toString() : null)
+                .unit(requirement.getUnit())
+                .estimatedCost(requirement.getEstimatedCost() != null ? requirement.getEstimatedCost().toString() : null)
+                .procurementType(requirement.getProcurementType() != null ? requirement.getProcurementType().name() : null)
+                .isOptional(requirement.getIsOptional())
+                .notes(requirement.getNotes())
+                .supplierItemCode(requirement.getSupplierItemCode())
+                .templateNotes(requirement.getTemplateNotes())
+                .createdAt(requirement.getCreatedAt())
+                .updatedAt(requirement.getUpdatedAt())
+                .build();
+    }
+    
+    /**
+     * Convert WorkflowDependency entity to detailed DTO
+     */
+    private WorkflowTemplateDetailResponse.WorkflowDependencyDetailResponse convertToDependencyDetailResponse(WorkflowDependency dependency) {
+        return WorkflowTemplateDetailResponse.WorkflowDependencyDetailResponse.builder()
+                .id(dependency.getId())
+                .dependentEntityType(dependency.getDependentEntityType().name())
+                .dependentEntityId(dependency.getDependentEntityId())
+                .dependentEntityName("") // Would need to fetch entity name based on type and ID
+                .dependsOnEntityType(dependency.getDependsOnEntityType().name())
+                .dependsOnEntityId(dependency.getDependsOnEntityId())
+                .dependsOnEntityName("") // Would need to fetch entity name based on type and ID
+                .dependencyType(dependency.getDependencyType().name())
+                .lagDays(dependency.getLagDays())
+                .createdAt(dependency.getCreatedAt())
+                .updatedAt(dependency.getUpdatedAt())
+                .build();
     }
     
     /**

@@ -61,28 +61,15 @@ public class ProjectTask extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "order_index")
-    private Integer orderIndex;
-
     @Column(name = "estimated_days")
     private Integer estimatedDays;
-
-    @Column(name = "required_skills")
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Convert(converter = JsonbConverter.class)
-    private String requiredSkills;
-
-    @Column(name = "requirements")
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Convert(converter = JsonbConverter.class)
-    private String requirements;
 
     // Version tracking
     @Column(name = "workflow_task_version")
     private Integer workflowTaskVersion;
 
     @OneToMany(mappedBy = "projectTask", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @OrderBy("orderIndex")
+    @OrderBy("createdAt")
     @Builder.Default
     private List<ProjectStep> steps = new ArrayList<>();
 } 

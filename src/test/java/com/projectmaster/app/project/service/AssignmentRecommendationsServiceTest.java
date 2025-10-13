@@ -6,10 +6,9 @@ import com.projectmaster.app.contractor.repository.ContractingCompanyRepository;
 import com.projectmaster.app.crew.entity.Crew;
 import com.projectmaster.app.crew.repository.CrewRepository;
 import com.projectmaster.app.project.dto.AssignmentRecommendationsResponse;
-import com.projectmaster.app.project.entity.ProjectStep;
-import com.projectmaster.app.project.repository.ProjectStepRepository;
 import com.projectmaster.app.project.repository.ProjectStepAssignmentRepository;
 import com.projectmaster.app.workflow.entity.Specialty;
+import com.projectmaster.app.workflow.repository.SpecialtyRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,14 +21,13 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AssignmentRecommendationsServiceTest {
 
     @Mock
-    private ProjectStepRepository projectStepRepository;
+    private SpecialtyRepository specialtyRepository;
 
     @Mock
     private CrewRepository crewRepository;
@@ -43,15 +41,14 @@ class AssignmentRecommendationsServiceTest {
     @InjectMocks
     private AssignmentRecommendationsService recommendationsService;
 
-    private UUID stepId;
     private UUID specialtyId;
-    private ProjectStep projectStep;
+    private UUID companyId;
     private Specialty specialty;
 
     @BeforeEach
     void setUp() {
-        stepId = UUID.randomUUID();
         specialtyId = UUID.randomUUID();
+        companyId = UUID.randomUUID();
         
         specialty = new Specialty();
         specialty.setId(specialtyId);
@@ -59,27 +56,22 @@ class AssignmentRecommendationsServiceTest {
         specialty.setSpecialtyName("Concrete Work");
         specialty.setDescription("Specialized concrete construction work");
         specialty.setActive(true);
-        
-        projectStep = new ProjectStep();
-        projectStep.setId(stepId);
-        projectStep.setName("Foundation Concrete");
-        projectStep.setSpecialty(specialty);
     }
 
     @Test
-    void getAssignmentRecommendations_WithValidStep_ShouldReturnRecommendations() {
+    void getAssignmentRecommendations_WithValidSpecialtyAndCompany_ShouldReturnRecommendations() {
         // Arrange
-        when(projectStepRepository.findById(stepId)).thenReturn(Optional.of(projectStep));
-        when(crewRepository.findBySpecialtyId(specialtyId)).thenReturn(List.of());
-        when(contractingCompanyRepository.findBySpecialtyId(specialtyId)).thenReturn(List.of());
+        when(specialtyRepository.findById(specialtyId)).thenReturn(Optional.of(specialty));
+        when(crewRepository.findBySpecialtyIdAndCompanyId(specialtyId, companyId)).thenReturn(List.of());
+        when(contractingCompanyRepository.findBySpecialtyIdAndCompanyId(specialtyId, companyId)).thenReturn(List.of());
 
         // Act
-        AssignmentRecommendationsResponse result = recommendationsService.getAssignmentRecommendations(stepId);
+        AssignmentRecommendationsResponse result = recommendationsService.getAssignmentRecommendationsBySpecialty(specialtyId, companyId);
 
         // Assert
         assertNotNull(result);
-        assertEquals(stepId, result.getStepId());
-        assertEquals("Foundation Concrete", result.getStepName());
+        assertNull(result.getStepId()); // stepId is null for adhoc steps
+        assertNull(result.getStepName()); // stepName is null for adhoc steps
         assertNotNull(result.getRequiredSpecialty());
         assertEquals(specialtyId, result.getRequiredSpecialty().getId());
         assertEquals("Concrete Work", result.getRequiredSpecialty().getName());
@@ -89,23 +81,12 @@ class AssignmentRecommendationsServiceTest {
     }
 
     @Test
-    void getAssignmentRecommendations_WithNonExistentStep_ShouldThrowException() {
+    void getAssignmentRecommendations_WithNonExistentSpecialty_ShouldThrowException() {
         // Arrange
-        when(projectStepRepository.findById(stepId)).thenReturn(Optional.empty());
+        when(specialtyRepository.findById(specialtyId)).thenReturn(Optional.empty());
 
         // Act & Assert
         assertThrows(EntityNotFoundException.class, () -> 
-            recommendationsService.getAssignmentRecommendations(stepId));
-    }
-
-    @Test
-    void getAssignmentRecommendations_WithStepWithoutSpecialty_ShouldThrowException() {
-        // Arrange
-        projectStep.setSpecialty(null);
-        when(projectStepRepository.findById(stepId)).thenReturn(Optional.of(projectStep));
-
-        // Act & Assert
-        assertThrows(IllegalStateException.class, () -> 
-            recommendationsService.getAssignmentRecommendations(stepId));
+            recommendationsService.getAssignmentRecommendationsBySpecialty(specialtyId, companyId));
     }
 }

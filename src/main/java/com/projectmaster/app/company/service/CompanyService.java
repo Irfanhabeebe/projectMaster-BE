@@ -4,6 +4,7 @@ import com.projectmaster.app.common.enums.UserRole;
 import com.projectmaster.app.common.exception.EntityNotFoundException;
 import com.projectmaster.app.common.exception.ProjectMasterException;
 import com.projectmaster.app.company.dto.CompanyDto;
+import com.projectmaster.app.company.dto.CompanySearchRequest;
 import com.projectmaster.app.company.entity.Company;
 import com.projectmaster.app.company.repository.CompanyRepository;
 import com.projectmaster.app.user.dto.CreateUserRequest;
@@ -11,10 +12,12 @@ import com.projectmaster.app.user.service.UserService;
 import com.projectmaster.app.workflow.service.WorkflowCopyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -28,6 +31,7 @@ public class CompanyService {
     private final CompanyRepository companyRepository;
     private final UserService userService;
     private final WorkflowCopyService workflowCopyService;
+    private final com.projectmaster.app.core.service.HolidayService holidayService;
 
     public CompanyDto createCompany(CompanyDto companyDto) {
         log.info("Creating company with name: {}", companyDto.getName());
@@ -60,6 +64,9 @@ public class CompanyService {
 
         // Copy standard workflows to the new company
         copyStandardWorkflowsToCompany(savedCompany);
+
+        // Copy master holidays to the new company
+        copyMasterHolidaysToCompany(savedCompany);
 
         return mapToDto(savedCompany);
     }
@@ -110,6 +117,19 @@ public class CompanyService {
         }
     }
 
+    private void copyMasterHolidaysToCompany(Company company) {
+        log.info("Copying master holidays to company: {}", company.getName());
+        
+        try {
+            holidayService.copyMasterHolidaysToCompany(company.getId());
+            log.info("Successfully copied master holidays to company: {}", company.getName());
+        } catch (Exception e) {
+            log.error("Failed to copy master holidays to company: {}", company.getName(), e);
+            // Don't throw exception here to avoid rolling back company creation
+            // The company should still be created even if holiday copying fails
+        }
+    }
+
     @Transactional(readOnly = true)
     public CompanyDto getCompanyById(UUID id) {
         Company company = companyRepository.findById(id)
@@ -131,6 +151,29 @@ public class CompanyService {
                 .stream()
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Search companies with advanced filtering and pagination
+     */
+    @Transactional(readOnly = true)
+    public Page<CompanyDto> searchCompanies(CompanySearchRequest searchRequest) {
+        log.debug("Searching companies with request: {}", searchRequest);
+
+        // Create pageable without sorting (sorting is handled in the query)
+        Pageable pageable = PageRequest.of(searchRequest.getPage(), searchRequest.getSize());
+
+        // Search with filters using repository
+        Page<Company> companies = companyRepository.searchCompanies(
+                searchRequest.getActiveOnly(),
+                searchRequest.getSearchText(),
+                searchRequest.getSortBy(),
+                searchRequest.getSortDirection(),
+                pageable
+        );
+
+        // Convert to DTOs
+        return companies.map(this::mapToDto);
     }
 
     public CompanyDto updateCompany(UUID id, CompanyDto companyDto) {

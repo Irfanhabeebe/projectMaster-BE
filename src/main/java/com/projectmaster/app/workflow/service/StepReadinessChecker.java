@@ -204,19 +204,59 @@ public class StepReadinessChecker {
     }
 
     /**
-     * Check all steps in a project for readiness
+     * Check steps that could be affected by a step completion
+     * Only checks steps that have dependencies on the completed step
      */
     @Transactional
-    public void checkAllStepsInProject(UUID projectId) {
-        log.info("Checking all steps in project: {}", projectId);
+    public void checkStepsAffectedByCompletion(UUID completedStepId, UUID projectId) {
+        log.info("Checking steps affected by completion of step: {} in project: {}", completedStepId, projectId);
         
-        List<ProjectStep> allSteps = projectStepRepository.findByProjectTasksProjectStagesProjectId(projectId);
+        // Find all steps that depend on the completed step
+        List<ProjectDependency> affectedDependencies = projectDependencyRepository
+                .findByDependsOnEntityIdAndDependsOnEntityTypeAndProjectId(
+                        completedStepId, DependencyEntityType.STEP, projectId);
         
-        for (ProjectStep step : allSteps) {
-            if (step.getStatus() == ProjectStep.StepExecutionStatus.NOT_STARTED) {
-                checkAndUpdateStepStatus(step.getId());
+        for (ProjectDependency dependency : affectedDependencies) {
+            if (dependency.getDependentEntityType() == DependencyEntityType.STEP) {
+                ProjectStep dependentStep = projectStepRepository.findById(dependency.getDependentEntityId())
+                        .orElse(null);
+                
+                if (dependentStep != null && dependentStep.getStatus() == ProjectStep.StepExecutionStatus.NOT_STARTED) {
+                    log.debug("Checking dependent step: {}", dependentStep.getId());
+                    checkAndUpdateStepStatus(dependentStep.getId());
+                }
             }
         }
+        
+        log.info("Completed checking steps affected by step completion");
+    }
+    
+    /**
+     * Check steps that could be affected by a task completion
+     * Only checks steps that have dependencies on the completed task
+     */
+    @Transactional
+    public void checkStepsAffectedByTaskCompletion(UUID completedTaskId, UUID projectId) {
+        log.info("Checking steps affected by completion of task: {} in project: {}", completedTaskId, projectId);
+        
+        // Find all steps that depend on the completed task
+        List<ProjectDependency> affectedDependencies = projectDependencyRepository
+                .findByDependsOnEntityIdAndDependsOnEntityTypeAndProjectId(
+                        completedTaskId, DependencyEntityType.TASK, projectId);
+        
+        for (ProjectDependency dependency : affectedDependencies) {
+            if (dependency.getDependentEntityType() == DependencyEntityType.STEP) {
+                ProjectStep dependentStep = projectStepRepository.findById(dependency.getDependentEntityId())
+                        .orElse(null);
+                
+                if (dependentStep != null && dependentStep.getStatus() == ProjectStep.StepExecutionStatus.NOT_STARTED) {
+                    log.debug("Checking dependent step: {}", dependentStep.getId());
+                    checkAndUpdateStepStatus(dependentStep.getId());
+                }
+            }
+        }
+        
+        log.info("Completed checking steps affected by task completion");
     }
 }
 

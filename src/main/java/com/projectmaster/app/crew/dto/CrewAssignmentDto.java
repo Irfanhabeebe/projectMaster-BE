@@ -99,9 +99,6 @@ public class CrewAssignmentDto {
     @Schema(description = "Step execution status", example = "NOT_STARTED")
     private StepExecutionStatus stepStatus;
     
-    @Schema(description = "Step order index", example = "1")
-    private Integer stepOrderIndex;
-    
     @Schema(description = "Step estimated days", example = "2")
     private Integer stepEstimatedDays;
     
@@ -122,12 +119,6 @@ public class CrewAssignmentDto {
     
     @Schema(description = "Quality check passed")
     private Boolean qualityCheckPassed;
-    
-    @Schema(description = "Required skills for this step")
-    private String requiredSkills;
-    
-    @Schema(description = "Step requirements")
-    private String requirements;
     
     @Schema(description = "Specialty required for this step")
     private String specialtyName;

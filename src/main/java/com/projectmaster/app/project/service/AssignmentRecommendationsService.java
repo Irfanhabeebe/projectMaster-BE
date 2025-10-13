@@ -6,8 +6,6 @@ import com.projectmaster.app.contractor.repository.ContractingCompanyRepository;
 import com.projectmaster.app.crew.entity.Crew;
 import com.projectmaster.app.crew.repository.CrewRepository;
 import com.projectmaster.app.project.dto.AssignmentRecommendationsResponse;
-import com.projectmaster.app.project.entity.ProjectStep;
-import com.projectmaster.app.project.repository.ProjectStepRepository;
 import com.projectmaster.app.project.repository.ProjectStepAssignmentRepository;
 import com.projectmaster.app.workflow.entity.Specialty;
 import lombok.RequiredArgsConstructor;
@@ -24,43 +22,33 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class AssignmentRecommendationsService {
 
-    private final ProjectStepRepository projectStepRepository;
     private final CrewRepository crewRepository;
     private final ContractingCompanyRepository contractingCompanyRepository;
     private final ProjectStepAssignmentRepository assignmentRepository;
+    private final com.projectmaster.app.workflow.repository.SpecialtyRepository specialtyRepository;
 
     /**
-     * Get assignment recommendations for a project step
+     * Get assignment recommendations for a specialty within a company context
+     * Used for adhoc steps where stepId is not available
      */
-    public AssignmentRecommendationsResponse getAssignmentRecommendations(UUID stepId) {
-        log.info("Getting assignment recommendations for step: {}", stepId);
+    public AssignmentRecommendationsResponse getAssignmentRecommendationsBySpecialty(UUID specialtyId, UUID companyId) {
+        log.info("Getting assignment recommendations for specialty: {} in company: {}", specialtyId, companyId);
 
-        // Get project step and validate
-        ProjectStep projectStep = projectStepRepository.findById(stepId)
-                .orElseThrow(() -> new EntityNotFoundException("ProjectStep", stepId));
-
-        // Get company from project step: step -> task -> stage -> project -> company
-        UUID companyId = projectStep.getProjectTask()
-                .getProjectStage()
-                .getProject()
-                .getCompany()
-                .getId();
-
-        if (projectStep.getSpecialty() == null) {
-            throw new IllegalStateException("Project step does not have a required specialty");
-        }
+        // Get specialty and validate
+        Specialty specialty = specialtyRepository.findById(specialtyId)
+                .orElseThrow(() -> new EntityNotFoundException("Specialty", specialtyId));
 
         // Get required specialty info
         AssignmentRecommendationsResponse.RequiredSpecialtyInfo requiredSpecialty = 
-                buildRequiredSpecialtyInfo(projectStep.getSpecialty());
+                buildRequiredSpecialtyInfo(specialty);
 
         // Get crew recommendations filtered by company
         List<AssignmentRecommendationsResponse.CrewRecommendation> crewRecommendations = 
-                getCrewRecommendations(projectStep.getSpecialty(), companyId);
+                getCrewRecommendations(specialty, companyId);
 
         // Get contracting company recommendations filtered by company
         List<AssignmentRecommendationsResponse.ContractingCompanyRecommendation> companyRecommendations = 
-                getContractingCompanyRecommendations(projectStep.getSpecialty(), companyId);
+                getContractingCompanyRecommendations(specialty, companyId);
 
         // Sort recommendations by specialty match and rating
         crewRecommendations.sort(Comparator
@@ -74,8 +62,8 @@ public class AssignmentRecommendationsService {
                 .reversed());
 
         return AssignmentRecommendationsResponse.builder()
-                .stepId(stepId)
-                .stepName(projectStep.getName())
+                .stepId(null)
+                .stepName(null)
                 .requiredSpecialty(requiredSpecialty)
                 .crewRecommendations(crewRecommendations)
                 .contractingCompanyRecommendations(companyRecommendations)

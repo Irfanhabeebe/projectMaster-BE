@@ -34,20 +34,25 @@ public class ProjectStepAssignmentController {
     private final AssignmentRecommendationsService recommendationsService;
 
     /**
-     * Get assignment recommendations for a project step
+     * Get assignment recommendations for a specialty within the logged-in user's company
      */
-    @GetMapping("/{stepId}/recommendations")
+    @GetMapping("/recommendations/{specialtyId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('PROJECT_MANAGER')")
     @Operation(
-        summary = "Get assignment recommendations for a project step",
-        description = "Returns intelligent recommendations for crew members and contracting companies based on the step's required specialty"
+        summary = "Get assignment recommendations for a specialty",
+        description = "Returns intelligent recommendations for crew members and contracting companies based on the specialty within the logged-in user's company context"
     )
     public ResponseEntity<ApiResponse<AssignmentRecommendationsResponse>> getAssignmentRecommendations(
-            @Parameter(description = "ID of the project step") @PathVariable UUID stepId) {
+            @Parameter(description = "ID of the specialty") @PathVariable UUID specialtyId,
+            Authentication authentication) {
         
-        log.info("Getting assignment recommendations for step: {}", stepId);
+        CustomUserDetailsService.CustomUserPrincipal userPrincipal = 
+                (CustomUserDetailsService.CustomUserPrincipal) authentication.getPrincipal();
+        UUID companyId = userPrincipal.getUser().getCompany().getId();
         
-        AssignmentRecommendationsResponse recommendations = recommendationsService.getAssignmentRecommendations(stepId);
+        log.info("Getting assignment recommendations for specialty: {} in company: {}", specialtyId, companyId);
+        
+        AssignmentRecommendationsResponse recommendations = recommendationsService.getAssignmentRecommendationsBySpecialty(specialtyId, companyId);
         
         ApiResponse<AssignmentRecommendationsResponse> response = ApiResponse.<AssignmentRecommendationsResponse>builder()
                 .success(true)

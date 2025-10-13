@@ -11,11 +11,9 @@ import com.projectmaster.app.workflow.repository.ProjectDependencyRepository;
 import com.projectmaster.app.project.entity.Project;
 import com.projectmaster.app.project.entity.ProjectTask;
 import com.projectmaster.app.project.entity.ProjectStep;
-import com.projectmaster.app.project.entity.AdhocTask;
 import com.projectmaster.app.project.repository.ProjectRepository;
 import com.projectmaster.app.project.repository.ProjectTaskRepository;
 import com.projectmaster.app.project.repository.ProjectStepRepository;
-import com.projectmaster.app.project.repository.AdhocTaskRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,7 +32,6 @@ public class WorkflowTemplateBuilder {
     private final ProjectRepository projectRepository;
     private final ProjectTaskRepository projectTaskRepository;
     private final ProjectStepRepository projectStepRepository;
-    private final AdhocTaskRepository adhocTaskRepository;
     
     /**
      * Add a dependency to a workflow template
@@ -135,38 +132,9 @@ public class WorkflowTemplateBuilder {
                     .findFirst()
                     .orElse(null);
                     
-            case ADHOC_TASK:
-                // Ad-hoc tasks don't have workflow templates, so this shouldn't happen
-                log.warn("Attempted to map ad-hoc task from workflow template");
-                return null;
-                
             default:
                 return null;
         }
-    }
-    
-    /**
-     * Add a dependency for an ad-hoc task
-     */
-    @Transactional
-    public void addAdhocTaskDependency(UUID adhocTaskId, UUID projectId, 
-                                     DependencyRequest request) {
-        
-        ProjectDependency dependency = ProjectDependency.builder()
-            .projectId(projectId)
-            .dependentEntityType(DependencyEntityType.ADHOC_TASK)
-            .dependentEntityId(adhocTaskId)
-            .dependsOnEntityType(request.getDependsOnEntityType())
-            .dependsOnEntityId(request.getDependsOnEntityId())
-            .dependencyType(request.getDependencyType())
-            .lagDays(request.getLagDays())
-            .status(DependencyStatus.PENDING)
-            .build();
-        
-        projectDependencyRepository.save(dependency);
-        
-        log.info("Added ad-hoc task dependency: task {} depends on {} {}", 
-                adhocTaskId, request.getDependsOnEntityType(), request.getDependsOnEntityId());
     }
     
     /**

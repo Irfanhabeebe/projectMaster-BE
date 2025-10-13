@@ -1,8 +1,8 @@
 package com.projectmaster.app.contractor.service;
 
-import com.projectmaster.app.common.dto.ApiResponse;
 import com.projectmaster.app.contractor.dto.CreateContractingCompanyRequest;
 import com.projectmaster.app.contractor.dto.ContractingCompanyResponse;
+import com.projectmaster.app.contractor.dto.ContractingCompanySearchRequest;
 import com.projectmaster.app.contractor.entity.*;
 import com.projectmaster.app.contractor.repository.ContractingCompanyRepository;
 import com.projectmaster.app.user.entity.User;
@@ -12,6 +12,11 @@ import com.projectmaster.app.workflow.entity.Specialty;
 import com.projectmaster.app.workflow.service.SpecialtyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -170,6 +175,59 @@ public class ContractingCompanyService {
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Search contracting companies by name with pagination
+     */
+    public Page<ContractingCompanyResponse> searchContractingCompanies(String searchText, Pageable pageable) {
+        log.debug("Searching contracting companies with text: {} (page: {}, size: {})",
+                searchText, pageable.getPageNumber(), pageable.getPageSize());
+
+        // Get all matching companies
+        List<ContractingCompany> allCompanies = contractingCompanyRepository
+                .findByNameContainingIgnoreCaseOrderByName(searchText);
+
+        // Convert to response DTOs
+        List<ContractingCompanyResponse> allResponses = allCompanies.stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+
+        // Apply pagination manually
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), allResponses.size());
+
+        List<ContractingCompanyResponse> paginatedResponses = start < allResponses.size()
+                ? allResponses.subList(start, end)
+                : List.of();
+
+        return new PageImpl<>(paginatedResponses, pageable, allResponses.size());
+    }
+
+    /**
+     * Search contracting companies with advanced filtering and pagination
+     */
+    public Page<ContractingCompanyResponse> searchContractingCompanies(ContractingCompanySearchRequest searchRequest) {
+        log.debug("Searching contracting companies with request: {}", searchRequest);
+
+        // Build pageable with sorting
+        Sort sort = Sort.by(
+            Sort.Direction.fromString(searchRequest.getSortDirection()), 
+            searchRequest.getSortBy()
+        );
+        Pageable pageable = PageRequest.of(searchRequest.getPage(), searchRequest.getSize(), sort);
+
+        // Search with filters using repository
+        Page<ContractingCompany> companies = contractingCompanyRepository.searchContractingCompanies(
+                searchRequest.getActiveOnly(),
+                searchRequest.getSearchText(),
+                searchRequest.getVerified(),
+                searchRequest.getSpecialtyType(),
+                searchRequest.getSpecialtyName(),
+                pageable
+        );
+
+        return companies.map(this::mapToResponse);
     }
 
     /**

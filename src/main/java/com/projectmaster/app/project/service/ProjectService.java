@@ -75,6 +75,7 @@ public class ProjectService {
     private final ProjectDependencyRepository projectDependencyRepository;
     private final ProjectStepAssignmentService projectStepAssignmentService;
     private final ProjectScheduleCalculator projectScheduleCalculator;
+    private final StepRequirementCopyService stepRequirementCopyService;
     /**
      * Create a new project
      */
@@ -388,6 +389,7 @@ public class ProjectService {
                 .projectNumber(project.getProjectNumber())
                 .projectStatus(project.getStatus().name())
                 .progressPercentage(project.getProgressPercentage())
+                .workflowRebuildRequired(project.getWorkflowRebuildRequired())
                 .stages(stageResponses)
                 .build();
     }
@@ -448,7 +450,7 @@ public class ProjectService {
     private ProjectStage createProjectTasksForStage(ProjectStage projectStage, WorkflowStage workflowStage) {
         // Get all tasks from the workflow stage ordered by order index
         List<WorkflowTask> workflowTasks = workflowTaskRepository
-                .findByWorkflowStageIdOrderByOrderIndex(workflowStage.getId());
+                .findByWorkflowStageIdOrderByCreatedAt(workflowStage.getId());
 
         if (workflowTasks.isEmpty()) {
             log.debug("No tasks found in workflow stage: {}", workflowStage.getId());
@@ -464,10 +466,7 @@ public class ProjectService {
                     .status(com.projectmaster.app.common.enums.StageStatus.NOT_STARTED)
                     // Copy all properties from WorkflowTask
                     .description(workflowTask.getDescription())
-                    .orderIndex(workflowTask.getOrderIndex())
                     .estimatedDays(workflowTask.getEstimatedDays())
-                    .requiredSkills(workflowTask.getRequiredSkills())
-                    .requirements(workflowTask.getRequirements())
                     // Version tracking
                     .workflowTaskVersion(workflowTask.getVersion())
                     .build();
@@ -490,7 +489,7 @@ public class ProjectService {
     private ProjectTask createProjectStepsForTask(ProjectTask projectTask, WorkflowTask workflowTask) {
         // Get all steps from the workflow task ordered by order index
         List<WorkflowStep> workflowSteps = workflowStepRepository
-                .findByWorkflowTaskIdOrderByOrderIndex(workflowTask.getId());
+                .findByWorkflowTaskIdOrderByCreatedAt(workflowTask.getId());
 
         if (workflowSteps.isEmpty()) {
             log.debug("No steps found in workflow task: {}", workflowTask.getId());
@@ -506,16 +505,17 @@ public class ProjectService {
                     .status(com.projectmaster.app.project.entity.ProjectStep.StepExecutionStatus.NOT_STARTED)
                     // Copy all properties from WorkflowStep
                     .description(workflowStep.getDescription())
-                    .orderIndex(workflowStep.getOrderIndex())
                     .estimatedDays(workflowStep.getEstimatedDays())
-                    .requiredSkills(workflowStep.getRequiredSkills())
-                    .requirements(workflowStep.getRequirements())
                     .specialty(workflowStep.getSpecialty()) // Copy the specialty from workflow step
                     // Version tracking
                     .workflowStepVersion(workflowStep.getVersion())
                     .build();
 
             ProjectStep savedProjectStep = projectStepRepository.save(projectStep);
+            
+            // Copy requirements from workflow step to project step
+            stepRequirementCopyService.copyWorkflowRequirementsToProjectStep(savedProjectStep, workflowStep);
+            
             projectTask.getSteps().add(savedProjectStep);
             log.debug("Created project step: {} for project task: {}", savedProjectStep.getId(), projectTask.getId());
         }
@@ -670,7 +670,6 @@ public class ProjectService {
                 .name(projectTask.getName())
                 .description(projectTask.getDescription())
                 .status(projectTask.getStatus())
-                .orderIndex(projectTask.getOrderIndex())
                 .estimatedDays(projectTask.getEstimatedDays())
                 .startDate(projectTask.getPlannedStartDate())
                 .endDate(projectTask.getPlannedEndDate())
@@ -678,8 +677,6 @@ public class ProjectService {
                 .actualEndDate(projectTask.getActualEndDate())
                 .notes(projectTask.getNotes())
                 .qualityCheckPassed(projectTask.getQualityCheckPassed())
-                .requiredSkills(projectTask.getRequiredSkills())
-                .requirements(projectTask.getRequirements())
                 .steps(stepResponses)
                 .dependencies(taskDependencies)
                 .build();
@@ -717,7 +714,6 @@ public class ProjectService {
                 .name(projectStep.getName())
                 .description(projectStep.getDescription())
                 .status(projectStep.getStatus())
-                .orderIndex(projectStep.getOrderIndex())
                 .estimatedDays(projectStep.getEstimatedDays())
                 .startDate(projectStep.getPlannedStartDate())
                 .endDate(projectStep.getPlannedEndDate())
@@ -725,8 +721,6 @@ public class ProjectService {
                 .actualEndDate(projectStep.getActualEndDate())
                 .notes(projectStep.getNotes())
                 .qualityCheckPassed(projectStep.getQualityCheckPassed())
-                .requiredSkills(projectStep.getRequiredSkills())
-                .requirements(projectStep.getRequirements())
                 .specialty(specialtyResponse)
                 .assignments(assignments)
                 .dependencies(stepDependencies)

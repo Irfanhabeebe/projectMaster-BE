@@ -130,26 +130,6 @@ public class DependencyController {
     }
     
     /**
-     * Add dependency for an ad-hoc task
-     */
-    @PostMapping("/adhoc-tasks/{adhocTaskId}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('PROJECT_MANAGER')")
-    public ResponseEntity<ApiResponse<Void>> addAdhocTaskDependency(
-            @PathVariable UUID projectId,
-            @PathVariable UUID adhocTaskId,
-            @RequestBody WorkflowTemplateBuilder.DependencyRequest request) {
-        
-        log.info("Adding dependency for ad-hoc task {} in project {}", adhocTaskId, projectId);
-        
-        workflowTemplateBuilder.addAdhocTaskDependency(adhocTaskId, projectId, request);
-        
-        return ResponseEntity.ok(ApiResponse.<Void>builder()
-                .success(true)
-                .message("Ad-hoc task dependency added successfully")
-                .build());
-    }
-    
-    /**
      * Get dependency graph for visualization
      */
     @GetMapping("/graph")

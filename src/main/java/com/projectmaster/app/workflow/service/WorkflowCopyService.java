@@ -30,6 +30,7 @@ public class WorkflowCopyService {
     private final WorkflowTaskRepository workflowTaskRepository;
     private final WorkflowStepRepository workflowStepRepository;
     private final WorkflowDependencyRepository workflowDependencyRepository;
+    private final WorkflowStepRequirementCopyService workflowStepRequirementCopyService;
 
     /**
      * Copy all active standard workflows to a company
@@ -97,7 +98,7 @@ public class WorkflowCopyService {
             
             // Copy tasks for this stage
             List<StandardWorkflowTask> standardTasks = standardWorkflowTaskRepository
-                    .findByStandardWorkflowStageIdOrderByOrderIndex(standardStage.getId());
+                    .findByStandardWorkflowStageIdOrderByCreatedAt(standardStage.getId());
             
             for (StandardWorkflowTask standardTask : standardTasks) {
                 WorkflowTask workflowTask = copyStandardWorkflowTask(standardTask, workflowStage);
@@ -146,10 +147,7 @@ public class WorkflowCopyService {
                 .workflowStage(workflowStage)
                 .name(standardTask.getName())
                 .description(standardTask.getDescription())
-                .orderIndex(standardTask.getOrderIndex())
                 .estimatedDays(standardTask.getEstimatedDays())
-                .requiredSkills(standardTask.getRequiredSkills())
-                .requirements(standardTask.getRequirements())
                 .version(1)
                 .standardWorkflowTaskId(standardTask.getId()) // Store reference to standard task
                 .build();
@@ -165,16 +163,19 @@ public class WorkflowCopyService {
                 .workflowTask(workflowTask)
                 .name(standardStep.getName())
                 .description(standardStep.getDescription())
-                .orderIndex(standardStep.getOrderIndex())
                 .estimatedDays(standardStep.getEstimatedDays())
-                .requiredSkills(standardStep.getRequiredSkills())
-                .requirements(standardStep.getRequirements())
                 .specialty(standardStep.getSpecialty()) // Copy the specialty
                 .version(1)
                 .standardWorkflowStepId(standardStep.getId()) // Store reference to standard step
                 .build();
         
-        return workflowStepRepository.save(workflowStep);
+        WorkflowStep savedWorkflowStep = workflowStepRepository.save(workflowStep);
+        
+        // Copy step requirements from standard to company workflow step
+        workflowStepRequirementCopyService.copyStandardRequirementsToWorkflowStep(
+                standardStep.getId(), savedWorkflowStep);
+        
+        return savedWorkflowStep;
     }
 
     /**

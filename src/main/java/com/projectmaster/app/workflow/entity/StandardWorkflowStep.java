@@ -26,21 +26,8 @@ public class StandardWorkflowStep extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "order_index")
-    private Integer orderIndex;
-
     @Column(name = "estimated_days")
     private Integer estimatedDays;
-
-    @Column(name = "required_skills")
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Convert(converter = JsonbConverter.class)
-    private String requiredSkills;
-
-    @Column(name = "requirements")
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Convert(converter = JsonbConverter.class)
-    private String requirements;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "specialty_id", nullable = false)

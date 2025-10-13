@@ -19,6 +19,11 @@ public interface WorkflowDependencyRepository extends JpaRepository<WorkflowDepe
     List<WorkflowDependency> findByWorkflowTemplateId(UUID workflowTemplateId);
     
     /**
+     * Find dependencies by source template ID and source entity type
+     */
+    List<WorkflowDependency> findByWorkflowTemplateIdAndDependentEntityType(UUID workflowTemplateId, DependencyEntityType dependentEntityType);
+    
+    /**
      * Find dependencies where a specific entity is the dependent
      */
     List<WorkflowDependency> findByDependentEntityTypeAndDependentEntityId(

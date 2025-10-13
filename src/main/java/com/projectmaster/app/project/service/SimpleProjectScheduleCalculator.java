@@ -49,6 +49,10 @@ public class SimpleProjectScheduleCalculator {
         log.info("Starting simplified schedule calculation for project: {}", project.getId());
         
         try {
+            // Initialize holiday cache for this company to optimize business day calculations
+            businessCalendarService.initializeHolidayCache(project.getCompany().getId());
+            log.info("Holiday cache initialized for company: {}", project.getCompany().getId());
+            
             // Load all project entities
             List<ProjectStage> stages = projectStageRepository.findByProjectIdOrderByOrderIndex(project.getId());
             List<ProjectTask> tasks = projectTaskRepository.findByProjectStagesProjectId(project.getId());
@@ -98,6 +102,9 @@ public class SimpleProjectScheduleCalculator {
         } catch (Exception e) {
             log.error("Error calculating project schedule for project: {}", project.getId(), e);
             throw new RuntimeException("Failed to calculate project schedule", e);
+        } finally {
+            // Clear the holiday cache after calculation to free memory
+            businessCalendarService.clearHolidayCache();
         }
     }
     
@@ -144,8 +151,8 @@ public class SimpleProjectScheduleCalculator {
                 continue;
             }
             
-            // Sort steps by order index
-            taskSteps.sort(Comparator.comparing(ProjectStep::getOrderIndex));
+            // Sort steps by creation time
+            taskSteps.sort(Comparator.comparing(ProjectStep::getCreatedAt));
             
             // Get step dependencies for this task
             List<ProjectDependency> stepDependencies = dependencies.stream()

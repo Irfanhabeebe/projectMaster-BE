@@ -1,6 +1,7 @@
 package com.projectmaster.app.workflow.engine;
 
 import com.projectmaster.app.common.enums.StageStatus;
+import com.projectmaster.app.project.entity.ProjectStep;
 import com.projectmaster.app.project.entity.ProjectStepAssignment.AssignmentStatus;
 import com.projectmaster.app.workflow.dto.WorkflowExecutionContext;
 import com.projectmaster.app.workflow.enums.WorkflowActionType;
@@ -84,7 +85,17 @@ public class WorkflowStateValidator {
             throw new WorkflowValidationException("Project step is required to complete step");
         }
         
-        // Additional validation can be added here
+        // Check if step is in correct state to be completed
+        ProjectStep.StepExecutionStatus currentStatus = context.getProjectStep().getStatus();
+        if (currentStatus != ProjectStep.StepExecutionStatus.IN_PROGRESS) {
+            throw new WorkflowValidationException(
+                String.format("Cannot complete step with status: %s. Step must be IN_PROGRESS to complete.", currentStatus));
+        }
+        
+        // Check if step has been started (has actual start date)
+        if (context.getProjectStep().getActualStartDate() == null) {
+            throw new WorkflowValidationException("Step must have an actual start date before it can be completed");
+        }
     }
     
     private void validatePauseStage(WorkflowExecutionContext context) {

@@ -80,8 +80,8 @@ public class WorkflowEventHandler {
     public void handleStepCompleted(StepCompletedEvent event) {
         log.info("Step completed: {} for project: {}", event.getStepName(), event.getProjectId());
         
-        // Check if other steps in the same task can now be ready to start
-        stepReadinessChecker.checkAllStepsInProject(event.getProjectId());
+        // Step completion is now handled directly in StateManager.updateDependentStepsOnCompletion()
+        // No need for additional processing here to avoid duplicate updates
     }
 
     @EventListener
@@ -89,8 +89,8 @@ public class WorkflowEventHandler {
     public void handleTaskCompleted(TaskCompletedEvent event) {
         log.info("Task completed: {} for project: {}", event.getTaskName(), event.getProjectId());
         
-        // Check if steps in other tasks can now be ready to start
-        stepReadinessChecker.checkAllStepsInProject(event.getProjectId());
+        // Only check steps that have dependencies on the completed task
+        stepReadinessChecker.checkStepsAffectedByTaskCompletion(event.getTaskId(), event.getProjectId());
     }
 
     @EventListener

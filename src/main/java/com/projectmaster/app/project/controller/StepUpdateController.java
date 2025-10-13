@@ -2,13 +2,9 @@ package com.projectmaster.app.project.controller;
 
 import com.projectmaster.app.common.dto.ApiResponse;
 import com.projectmaster.app.project.dto.*;
-import com.projectmaster.app.project.entity.StepUpdate;
 import com.projectmaster.app.project.entity.StepUpdateDocument;
 import com.projectmaster.app.project.service.StepUpdateService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -16,8 +12,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -27,10 +21,15 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.Part;
+
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
 import java.util.UUID;
+
+import com.projectmaster.app.security.service.CustomUserDetailsService;
+
 
 @RestController
 @RequestMapping("/api/step-updates")
@@ -54,21 +53,60 @@ public class StepUpdateController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden")
     })
     public ResponseEntity<ApiResponse<StepUpdateResponse>> createStepUpdate(
-            @RequestPart("request") StepUpdateRequest request,
+            HttpServletRequest request,
             Authentication authentication) {
 
-        log.info("Creating step update for step: {}", request.getStepId());
+        try {
+            log.info("Content-Type: {}", request.getContentType());
+            
+            // Get the request part manually
+            Part requestPart = request.getPart("request");
+            if (requestPart == null) {
+                throw new RuntimeException("Request part not found");
+            }
+            
+            // Read the JSON content
+            String jsonContent = new String(requestPart.getInputStream().readAllBytes());
+            log.info("Request JSON: {}", jsonContent);
+            
+            // Parse JSON manually
+            ObjectMapper objectMapper = new ObjectMapper();
+            StepUpdateRequest stepUpdateRequest = objectMapper.readValue(jsonContent, StepUpdateRequest.class);
+            
+            // Extract file parts and populate DocumentUploadRequest.file fields
+            if (stepUpdateRequest.getDocuments() != null && !stepUpdateRequest.getDocuments().isEmpty()) {
+                for (int i = 0; i < stepUpdateRequest.getDocuments().size(); i++) {
+                    String filePartName = "documents[" + i + "].file";
+                    Part filePart = request.getPart(filePartName);
+                    
+                    if (filePart != null && filePart.getSize() > 0) {
+                        // Convert Part to MultipartFile
+                        MultipartFile multipartFile = new PartMultipartFile(filePart);
+                        stepUpdateRequest.getDocuments().get(i).setFile(multipartFile);
+                        log.info("Extracted file part {}: {} (size: {} bytes)", i, filePartName, filePart.getSize());
+                    } else {
+                        log.warn("File part {} not found or empty", filePartName);
+                    }
+                }
+            }
+            
+            log.info("Creating step update for step: {}", stepUpdateRequest.getStepId());
+            log.info("Request documents count: {}", stepUpdateRequest.getDocuments() != null ? stepUpdateRequest.getDocuments().size() : 0);
 
-        UUID userId = getCurrentUserId(authentication);
+            UUID userId = getCurrentUserId(authentication);
 
-        StepUpdateResponse response = stepUpdateService.createStepUpdate(request, userId);
+            StepUpdateResponse response = stepUpdateService.createStepUpdate(stepUpdateRequest, userId);
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.<StepUpdateResponse>builder()
-                        .success(true)
-                        .message("Step update created successfully")
-                        .data(response)
-                        .build());
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ApiResponse.<StepUpdateResponse>builder()
+                            .success(true)
+                            .message("Step update created successfully")
+                            .data(response)
+                            .build());
+        } catch (Exception e) {
+            log.error("Error processing step update request", e);
+            throw new RuntimeException("Error processing request: " + e.getMessage());
+        }
     }
 
     /**
@@ -318,29 +356,39 @@ public class StepUpdateController {
     }
 
     /**
-     * Download a document
+     * Download or view a document
      */
     @GetMapping("/documents/{documentId}/download")
     @PreAuthorize("hasRole('ADMIN') or hasRole('PROJECT_MANAGER') or hasRole('TRADIE')")
-    @Operation(summary = "Download document", description = "Download a document associated with a step update")
+    @Operation(summary = "Download or view document", description = "Download or view a document associated with a step update. Use ?view=true to display in browser, omit for download.")
     @ApiResponses(value = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Document downloaded successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Document retrieved successfully"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Document not found")
     })
     public ResponseEntity<Resource> downloadDocument(
-            @PathVariable UUID documentId) throws IOException {
+            @PathVariable UUID documentId,
+            @RequestParam(value = "view", defaultValue = "false") boolean view) throws IOException {
 
-        log.info("Downloading document: {}", documentId);
+        log.info("{} document: {}", view ? "Viewing" : "Downloading", documentId);
 
         byte[] fileContent = stepUpdateService.downloadDocument(documentId);
         StepUpdateDocument document = stepUpdateService.getStepUpdateDocumentEntity(documentId);
         ByteArrayResource resource = new ByteArrayResource(fileContent);
 
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(document.getMimeType()))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + 
-                        (document.getOriginalFileName() != null ? document.getOriginalFileName() : document.getFileName()) + "\"")
-                .body(resource);
+        ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(document.getMimeType()));
+
+        if (view) {
+            // For viewing: inline disposition allows browser to display the file
+            responseBuilder.header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + 
+                    (document.getOriginalFileName() != null ? document.getOriginalFileName() : document.getFileName()) + "\"");
+        } else {
+            // For downloading: attachment disposition forces download
+            responseBuilder.header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + 
+                    (document.getOriginalFileName() != null ? document.getOriginalFileName() : document.getFileName()) + "\"");
+        }
+
+        return responseBuilder.body(resource);
     }
 
     /**
@@ -370,6 +418,8 @@ public class StepUpdateController {
     }
 
     private UUID getCurrentUserId(Authentication authentication) {
-        return UUID.fromString(authentication.getName());
+        CustomUserDetailsService.CustomUserPrincipal userPrincipal =
+                (CustomUserDetailsService.CustomUserPrincipal) authentication.getPrincipal();
+        return userPrincipal.getUser().getId();
     }
 }

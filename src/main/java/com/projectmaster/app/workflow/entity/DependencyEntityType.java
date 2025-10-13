@@ -6,8 +6,7 @@ package com.projectmaster.app.workflow.entity;
 public enum DependencyEntityType {
     STAGE("Stage"),
     TASK("Task"),
-    STEP("Step"),
-    ADHOC_TASK("Adhoc Task");
+    STEP("Step");
 
     private final String displayName;
 

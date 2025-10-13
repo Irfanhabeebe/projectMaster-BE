@@ -66,7 +66,8 @@ Authorization: Bearer <token>
 ```javascript
 const formData = new FormData();
 
-// Add the request JSON as a part
+// The current controller manually parses multipart data
+// Add the request JSON as a part with content-type
 const requestData = {
   stepId: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
   updateType: 'PROGRESS_UPDATE',
@@ -83,7 +84,10 @@ const requestData = {
     }
   ]
 };
-formData.append('request', new Blob([JSON.stringify(requestData)], { type: 'application/json' }));
+
+// Add the request part manually with proper content type
+const requestBlob = new Blob([JSON.stringify(requestData)], { type: 'application/json' });
+formData.append('request', requestBlob, 'request.json');
 
 // Add files as separate parts (one for each document)
 formData.append('documents[0].file', file1); // File object for first document
@@ -563,8 +567,9 @@ const createStepUpdate = async (stepId, updateData, documents) => {
       }))
     };
     
-    // Add request JSON as a part
-    formData.append('request', new Blob([JSON.stringify(requestData)], { type: 'application/json' }));
+    // IMPORTANT: Add request JSON as a properly formatted blob with filename
+    const requestBlob = new Blob([JSON.stringify(requestData)], { type: 'application/json' });
+    formData.append('request', requestBlob, 'request.json');
     
     // Add files as separate parts
     documents.forEach((doc, index) => {
@@ -573,10 +578,12 @@ const createStepUpdate = async (stepId, updateData, documents) => {
       }
     });
 
+    // IMPORTANT: Don't set Content-Type header manually - let browser set it
     const response = await fetch('/api/step-updates', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${getAuthToken()}`
+        // No Content-Type header - browser will set it automatically for FormData
       },
       body: formData
     });

@@ -13,6 +13,7 @@ import com.projectmaster.app.company.entity.Company;
 import com.projectmaster.app.company.repository.CompanyRepository;
 
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -24,6 +25,7 @@ import java.util.UUID;
 
 @Service
 @AllArgsConstructor
+@Slf4j
 @Transactional
 public class CustomerService {
     
@@ -139,6 +141,59 @@ public class CustomerService {
         List<UUID> customerIds = customerPage.getContent().stream()
                 .map(Customer::getId)
                 .toList();
+        
+        // Fetch customers with addresses for these specific IDs using a custom query
+        List<Customer> customersWithAddresses = customerRepository.findByIdsWithAddress(customerIds);
+        
+        // Convert to CustomerResponse DTOs
+        List<CustomerResponse> customerResponses = customersWithAddresses.stream()
+                .map(this::convertToCustomerResponse)
+                .toList();
+        
+        // Create a new page with the converted content
+        return new org.springframework.data.domain.PageImpl<>(
+                customerResponses,
+                pageable,
+                customerPage.getTotalElements()
+        );
+    }
+
+    /**
+     * Search customers with advanced filtering and pagination
+     */
+    @Transactional(readOnly = true)
+    public Page<CustomerResponse> searchCustomers(UUID companyId, com.projectmaster.app.customer.dto.CustomerSearchRequest searchRequest) {
+        log.debug("Searching customers for company {} with request: {}", companyId, searchRequest);
+
+        // Create pageable without sorting (sorting is handled in the query)
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+                searchRequest.getPage(), 
+                searchRequest.getSize()
+        );
+
+        // Search with filters using repository
+        Page<Customer> customerPage = customerRepository.searchCustomers(
+                companyId,
+                searchRequest.getActiveOnly(),
+                searchRequest.getSearchText(),
+                searchRequest.getSortBy(),
+                searchRequest.getSortDirection(),
+                pageable
+        );
+
+        // Get the customer IDs from the paginated results
+        List<UUID> customerIds = customerPage.getContent().stream()
+                .map(Customer::getId)
+                .toList();
+        
+        // Handle empty results
+        if (customerIds.isEmpty()) {
+            return new org.springframework.data.domain.PageImpl<>(
+                    List.of(),
+                    pageable,
+                    0
+            );
+        }
         
         // Fetch customers with addresses for these specific IDs using a custom query
         List<Customer> customersWithAddresses = customerRepository.findByIdsWithAddress(customerIds);

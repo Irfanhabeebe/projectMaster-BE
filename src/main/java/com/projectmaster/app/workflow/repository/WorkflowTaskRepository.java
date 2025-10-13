@@ -12,9 +12,9 @@ import java.util.UUID;
 @Repository
 public interface WorkflowTaskRepository extends JpaRepository<WorkflowTask, UUID> {
 
-    @Query("SELECT wt FROM WorkflowTask wt WHERE wt.workflowStage.id = :workflowStageId ORDER BY wt.orderIndex")
-    List<WorkflowTask> findByWorkflowStageIdOrderByOrderIndex(@Param("workflowStageId") UUID workflowStageId);
+    @Query("SELECT wt FROM WorkflowTask wt WHERE wt.workflowStage.id = :workflowStageId ORDER BY wt.createdAt")
+    List<WorkflowTask> findByWorkflowStageIdOrderByCreatedAt(@Param("workflowStageId") UUID workflowStageId);
 
-    @Query("SELECT wt FROM WorkflowTask wt WHERE wt.workflowStage.workflowTemplate.id = :workflowTemplateId ORDER BY wt.workflowStage.orderIndex, wt.orderIndex")
+    @Query("SELECT wt FROM WorkflowTask wt WHERE wt.workflowStage.workflowTemplate.id = :workflowTemplateId ORDER BY wt.workflowStage.orderIndex, wt.createdAt")
     List<WorkflowTask> findByWorkflowTemplateIdOrderByStageAndTaskOrder(@Param("workflowTemplateId") UUID workflowTemplateId);
 } 

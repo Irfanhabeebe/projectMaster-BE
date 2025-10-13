@@ -29,10 +29,10 @@ public class StepUpdateDocument extends BaseEntity {
     private StepUpdate stepUpdate;
 
     @Column(name = "file_name", nullable = false)
-    private String fileName;
+    private String fileName; // Unique system filename
 
     @Column(name = "original_file_name")
-    private String originalFileName;
+    private String originalFileName; // Display filename
 
     @Column(name = "file_extension")
     private String fileExtension;

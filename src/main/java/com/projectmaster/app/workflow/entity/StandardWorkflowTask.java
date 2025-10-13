@@ -28,23 +28,10 @@ public class StandardWorkflowTask extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "order_index")
-    private Integer orderIndex;
-
     @Column(name = "estimated_days")
     private Integer estimatedDays;
 
-    @Column(name = "required_skills")
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Convert(converter = JsonbConverter.class)
-    private String requiredSkills;
-
-    @Column(name = "requirements")
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Convert(converter = JsonbConverter.class)
-    private String requirements;
-
     @OneToMany(mappedBy = "standardWorkflowTask", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @OrderBy("orderIndex")
+    @OrderBy("createdAt")
     private List<StandardWorkflowStep> steps;
 } 

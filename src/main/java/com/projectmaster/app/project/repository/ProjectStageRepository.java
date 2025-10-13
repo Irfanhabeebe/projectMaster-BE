@@ -26,4 +26,7 @@ public interface ProjectStageRepository extends JpaRepository<ProjectStage, UUID
 
     @Query("SELECT ps FROM ProjectStage ps WHERE ps.project.id = :projectId AND ps.orderIndex < :orderIndex ORDER BY ps.orderIndex DESC")
     List<ProjectStage> findByProjectIdAndOrderIndexLessThanOrderByOrderIndexDesc(@Param("projectId") UUID projectId, @Param("orderIndex") Integer orderIndex);
+
+    @Query("SELECT ps FROM ProjectStage ps WHERE ps.project.id = :projectId AND ps.orderIndex > :orderIndex ORDER BY ps.orderIndex ASC")
+    List<ProjectStage> findByProjectIdAndOrderIndexGreaterThanOrderByOrderIndexAsc(@Param("projectId") UUID projectId, @Param("orderIndex") Integer orderIndex);
 }

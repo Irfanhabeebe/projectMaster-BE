@@ -298,7 +298,6 @@ public class CrewDashboardService {
                 .stepName(step.getName())
                 .stepDescription(step.getDescription())
                 .stepStatus(step.getStatus())
-                .stepOrderIndex(step.getOrderIndex())
                 .stepEstimatedDays(step.getEstimatedDays())
                 .stepStartDate(step.getPlannedStartDate())
                 .stepEndDate(step.getPlannedEndDate())
@@ -306,8 +305,6 @@ public class CrewDashboardService {
                 .stepActualEndDate(step.getActualEndDate())
                 .stepNotes(step.getNotes())
                 .qualityCheckPassed(step.getQualityCheckPassed())
-                .requiredSkills(step.getRequiredSkills())
-                .requirements(step.getRequirements())
                 .specialtyName(step.getSpecialty() != null ? step.getSpecialty().getSpecialtyName() : null)
                 
                 // Assignment metadata

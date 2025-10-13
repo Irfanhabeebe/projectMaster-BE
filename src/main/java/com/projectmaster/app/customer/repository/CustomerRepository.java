@@ -54,4 +54,34 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID> {
     boolean existsByCompanyIdAndEmailIgnoreCase(UUID companyId, String email);
 
     long countByCompanyIdAndActive(UUID companyId, Boolean active);
+
+    /**
+     * Search customers with advanced filtering and pagination
+     */
+    @Query("SELECT c FROM Customer c " +
+           "WHERE c.company.id = :companyId " +
+           "AND (:activeOnly = false OR c.active = true) " +
+           "AND (:searchText IS NULL OR :searchText = '' OR " +
+           "    c.firstName LIKE CONCAT('%', :searchText, '%') OR " +
+           "    c.lastName LIKE CONCAT('%', :searchText, '%') OR " +
+           "    c.email LIKE CONCAT('%', :searchText, '%') OR " +
+           "    c.phone LIKE CONCAT('%', :searchText, '%')) " +
+           "ORDER BY " +
+           "CASE WHEN :sortBy = 'firstName' AND :sortDirection = 'ASC' THEN c.firstName END ASC, " +
+           "CASE WHEN :sortBy = 'firstName' AND :sortDirection = 'DESC' THEN c.firstName END DESC, " +
+           "CASE WHEN :sortBy = 'lastName' AND :sortDirection = 'ASC' THEN c.lastName END ASC, " +
+           "CASE WHEN :sortBy = 'lastName' AND :sortDirection = 'DESC' THEN c.lastName END DESC, " +
+           "CASE WHEN :sortBy = 'email' AND :sortDirection = 'ASC' THEN c.email END ASC, " +
+           "CASE WHEN :sortBy = 'email' AND :sortDirection = 'DESC' THEN c.email END DESC, " +
+           "CASE WHEN :sortBy = 'createdAt' AND :sortDirection = 'ASC' THEN c.createdAt END ASC, " +
+           "CASE WHEN :sortBy = 'createdAt' AND :sortDirection = 'DESC' THEN c.createdAt END DESC, " +
+           "CASE WHEN :sortBy = 'active' AND :sortDirection = 'ASC' THEN c.active END ASC, " +
+           "CASE WHEN :sortBy = 'active' AND :sortDirection = 'DESC' THEN c.active END DESC")
+    Page<Customer> searchCustomers(
+            @Param("companyId") UUID companyId,
+            @Param("activeOnly") Boolean activeOnly,
+            @Param("searchText") String searchText,
+            @Param("sortBy") String sortBy,
+            @Param("sortDirection") String sortDirection,
+            Pageable pageable);
 }

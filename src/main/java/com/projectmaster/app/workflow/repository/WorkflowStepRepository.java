@@ -13,50 +13,35 @@ import java.util.UUID;
 public interface WorkflowStepRepository extends JpaRepository<WorkflowStep, UUID> {
     
     /**
-     * Find all steps by workflow stage ID ordered by order index
+     * Find all steps by workflow task ID ordered by creation time
      */
-    List<WorkflowStep> findByWorkflowTaskIdOrderByOrderIndex(UUID workflowTaskId);
+    List<WorkflowStep> findByWorkflowTaskIdOrderByCreatedAt(UUID workflowTaskId);
     
     /**
-     * Find steps by workflow stage ID and estimated days range
+     * Find steps by workflow task ID and estimated days range
      */
     @Query("SELECT ws FROM WorkflowStep ws WHERE ws.workflowTask.id = :taskId AND " +
-           "ws.estimatedDays BETWEEN :minDays AND :maxDays ORDER BY ws.orderIndex")
+           "ws.estimatedDays BETWEEN :minDays AND :maxDays ORDER BY ws.createdAt")
     List<WorkflowStep> findByTaskIdAndEstimatedDaysRange(@Param("taskId") UUID taskId,
                                                          @Param("minDays") Integer minDays,
                                                          @Param("maxDays") Integer maxDays);
     
     /**
-     * Find steps with required skills
-     */
-    @Query("SELECT ws FROM WorkflowStep ws WHERE ws.requiredSkills IS NOT NULL AND ws.requiredSkills != ''")
-    List<WorkflowStep> findStepsWithRequiredSkills();
-    
-    /**
-     * Find steps by workflow stage and order range
-     */
-    @Query("SELECT ws FROM WorkflowStep ws WHERE ws.workflowTask.id = :taskId AND " +
-           "ws.orderIndex BETWEEN :startOrder AND :endOrder ORDER BY ws.orderIndex")
-    List<WorkflowStep> findByTaskIdAndOrderRange(@Param("taskId") UUID taskId,
-                                                 @Param("startOrder") Integer startOrder,
-                                                 @Param("endOrder") Integer endOrder);
-    
-    /**
-     * Count steps by workflow stage
+     * Count steps by workflow task
      */
     Long countByWorkflowTaskId(UUID workflowTaskId);
     
     /**
-     * Find next step by order index
+     * Find next step by creation time
      */
     @Query("SELECT ws FROM WorkflowStep ws WHERE ws.workflowTask.id = :taskId AND " +
-           "ws.orderIndex > :currentOrder ORDER BY ws.orderIndex LIMIT 1")
-    WorkflowStep findNextStep(@Param("taskId") UUID taskId, @Param("currentOrder") Integer currentOrder);
+           "ws.createdAt > :currentCreatedAt ORDER BY ws.createdAt LIMIT 1")
+    WorkflowStep findNextStep(@Param("taskId") UUID taskId, @Param("currentCreatedAt") java.time.Instant currentCreatedAt);
     
     /**
-     * Find steps by workflow template (through stage)
+     * Find steps by workflow template (through stage and task)
      */
     @Query("SELECT ws FROM WorkflowStep ws WHERE ws.workflowTask.workflowStage.workflowTemplate.id = :templateId " +
-           "ORDER BY ws.workflowTask.workflowStage.orderIndex, ws.workflowTask.orderIndex, ws.orderIndex")
+           "ORDER BY ws.workflowTask.workflowStage.createdAt, ws.workflowTask.createdAt, ws.createdAt")
     List<WorkflowStep> findByWorkflowTemplateId(@Param("templateId") UUID templateId);
 }

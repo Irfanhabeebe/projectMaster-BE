@@ -88,4 +88,8 @@ public class Project extends BaseEntity {
     @Builder.Default
     @Column(name = "schedule_calculation_method", length = 50)
     private String scheduleCalculationMethod = "DEPENDENCY_BASED";
+    
+    @Builder.Default
+    @Column(name = "workflow_rebuild_required", nullable = false)
+    private Boolean workflowRebuildRequired = false;
 }

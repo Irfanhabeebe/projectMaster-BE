@@ -10,10 +10,8 @@ import com.projectmaster.app.workflow.dto.BottleneckInfo;
 import com.projectmaster.app.workflow.dto.ParallelOpportunity;
 import com.projectmaster.app.project.entity.ProjectTask;
 import com.projectmaster.app.project.entity.ProjectStep;
-import com.projectmaster.app.project.entity.AdhocTask;
 import com.projectmaster.app.project.repository.ProjectTaskRepository;
 import com.projectmaster.app.project.repository.ProjectStepRepository;
-import com.projectmaster.app.project.repository.AdhocTaskRepository;
 import com.projectmaster.app.common.enums.StageStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,7 +28,6 @@ public class AdvancedDependencyResolver {
     private final ProjectDependencyRepository projectDependencyRepository;
     private final ProjectTaskRepository projectTaskRepository;
     private final ProjectStepRepository projectStepRepository;
-    private final AdhocTaskRepository adhocTaskRepository;
     
     /**
      * Core parallel execution algorithm - get all entities that can start in parallel
@@ -114,11 +111,6 @@ public class AdvancedDependencyResolver {
                     .map(step -> step.getStatus() == com.projectmaster.app.project.entity.ProjectStep.StepExecutionStatus.COMPLETED)
                     .orElse(false);
                     
-            case ADHOC_TASK:
-                return adhocTaskRepository.findById(entityId)
-                    .map(task -> task.getStatus() == StageStatus.COMPLETED)
-                    .orElse(false);
-                    
             default:
                 return false;
         }
@@ -139,12 +131,6 @@ public class AdvancedDependencyResolver {
                 return projectStepRepository.findById(entityId)
                     .map(step -> step.getStatus() == com.projectmaster.app.project.entity.ProjectStep.StepExecutionStatus.IN_PROGRESS || 
                                 step.getStatus() == com.projectmaster.app.project.entity.ProjectStep.StepExecutionStatus.COMPLETED)
-                    .orElse(false);
-                    
-            case ADHOC_TASK:
-                return adhocTaskRepository.findById(entityId)
-                    .map(task -> task.getStatus() == StageStatus.IN_PROGRESS || 
-                                task.getStatus() == StageStatus.COMPLETED)
                     .orElse(false);
                     
             default:
@@ -169,12 +155,6 @@ public class AdvancedDependencyResolver {
                     .stream()
                     .filter(step -> step.getStatus() == com.projectmaster.app.project.entity.ProjectStep.StepExecutionStatus.NOT_STARTED)
                     .map(ProjectStep::getId)
-                    .collect(Collectors.toList());
-                    
-            case ADHOC_TASK:
-                return adhocTaskRepository.findByProjectIdAndStatus(projectId, StageStatus.NOT_STARTED)
-                    .stream()
-                    .map(AdhocTask::getId)
                     .collect(Collectors.toList());
                     
             default:
@@ -225,11 +205,6 @@ public class AdvancedDependencyResolver {
                 return projectStepRepository.findById(entityId)
                     .map(ProjectStep::getName)
                     .orElse("Unknown Step");
-                    
-            case ADHOC_TASK:
-                return adhocTaskRepository.findById(entityId)
-                    .map(AdhocTask::getTitle)
-                    .orElse("Unknown Ad-hoc Task");
                     
             default:
                 return "Unknown Entity";

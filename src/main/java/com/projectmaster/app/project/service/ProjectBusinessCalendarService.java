@@ -1,26 +1,26 @@
 package com.projectmaster.app.project.service;
 
-import com.projectmaster.app.common.entity.BusinessHoliday;
-import com.projectmaster.app.common.repository.BusinessHolidayRepository;
+import com.projectmaster.app.core.repository.CompanyHolidayRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Service for business calendar calculations
  * Handles working days, holidays, and business date calculations
+ * Caches company holidays for next 5 years to cover multi-year projects
  */
 @Service("projectBusinessCalendarService")
 @RequiredArgsConstructor
 @Slf4j
 public class ProjectBusinessCalendarService {
 
-    private final BusinessHolidayRepository businessHolidayRepository;
+    private final CompanyHolidayRepository companyHolidayRepository;
 
     // Default working days (Monday to Friday)
     private static final Set<DayOfWeek> DEFAULT_WORKING_DAYS = Set.of(
@@ -30,7 +30,81 @@ public class ProjectBusinessCalendarService {
             DayOfWeek.THURSDAY,
             DayOfWeek.FRIDAY
     );
+    
+    // Thread-local cache for holidays to avoid redundant DB calls during schedule calculation
+    private final ThreadLocal<HolidayCache> holidayCache = ThreadLocal.withInitial(HolidayCache::new);
+    
+    /**
+     * Internal cache class for company holidays
+     */
+    private static class HolidayCache {
+        UUID companyId;
+        Set<LocalDate> holidays = new HashSet<>();
+        boolean initialized = false;
+        
+        void clear() {
+            companyId = null;
+            holidays.clear();
+            initialized = false;
+        }
+    }
 
+    /**
+     * Initialize holiday cache for a company
+     * Loads holidays for next 5 years to cover projects that span multiple years
+     */
+    public void initializeHolidayCache(UUID companyId) {
+        if (companyId == null) {
+            log.warn("Cannot initialize holiday cache with null companyId");
+            return;
+        }
+        
+        HolidayCache cache = holidayCache.get();
+        
+        // Check if already initialized for this company
+        if (cache.initialized && companyId.equals(cache.companyId)) {
+            log.debug("Holiday cache already initialized for company: {}", companyId);
+            return;
+        }
+        
+        // Clear and reinitialize
+        cache.clear();
+        cache.companyId = companyId;
+        
+        // Get current year and next 4 years (5 years total)
+        int currentYear = LocalDate.now().getYear();
+        int yearsToCache = 5;
+        
+        log.debug("Initializing holiday cache for company: {} (years {}-{})", 
+            companyId, currentYear, currentYear + yearsToCache - 1);
+        
+        // Load holidays for next 5 years
+        for (int i = 0; i < yearsToCache; i++) {
+            int year = currentYear + i;
+            var yearHolidays = companyHolidayRepository
+                .findByCompanyIdAndHolidayYearOrderByHolidayDate(companyId, year);
+            
+            // Add all holiday dates to the cache
+            yearHolidays.forEach(h -> cache.holidays.add(h.getHolidayDate()));
+            
+            log.debug("Loaded {} holidays for year {} (company: {})", 
+                yearHolidays.size(), year, companyId);
+        }
+        
+        cache.initialized = true;
+        
+        log.info("Holiday cache initialized for company: {} with {} holidays across {} years ({}-{})", 
+            companyId, cache.holidays.size(), yearsToCache, currentYear, currentYear + yearsToCache - 1);
+    }
+    
+    /**
+     * Clear holiday cache (useful after holiday updates or when switching companies)
+     */
+    public void clearHolidayCache() {
+        holidayCache.get().clear();
+        log.debug("Holiday cache cleared");
+    }
+    
     /**
      * Calculate the number of business days between two dates
      */
@@ -201,26 +275,45 @@ public class ProjectBusinessCalendarService {
     }
 
     /**
-     * Check if a date is a holiday
+     * Check if a date is a holiday (uses cache if initialized)
      */
     public boolean isHoliday(LocalDate date) {
         if (date == null) {
             return false;
         }
 
-        List<BusinessHoliday> holidays = businessHolidayRepository.findByHolidayDate(date);
-        return !holidays.isEmpty();
+        HolidayCache cache = holidayCache.get();
+        
+        // Use cache if initialized
+        if (cache.initialized) {
+            return cache.holidays.contains(date);
+        }
+        
+        // Fallback: No cache initialized, return false
+        // This shouldn't happen if initializeHolidayCache is called properly
+        log.warn("Holiday cache not initialized, assuming {} is not a holiday", date);
+        return false;
     }
 
     /**
-     * Get all holidays in a date range
+     * Get all holidays in a date range from cache
      */
-    public List<BusinessHoliday> getHolidaysInRange(LocalDate startDate, LocalDate endDate) {
+    public Set<LocalDate> getHolidaysInRange(LocalDate startDate, LocalDate endDate) {
         if (startDate == null || endDate == null || startDate.isAfter(endDate)) {
-            return List.of();
+            return Set.of();
         }
 
-        return businessHolidayRepository.findNationalHolidaysInDateRange(startDate, endDate);
+        HolidayCache cache = holidayCache.get();
+        
+        if (!cache.initialized) {
+            log.warn("Holiday cache not initialized for getHolidaysInRange");
+            return Set.of();
+        }
+
+        // Filter cached holidays within the date range
+        return cache.holidays.stream()
+            .filter(date -> !date.isBefore(startDate) && !date.isAfter(endDate))
+            .collect(Collectors.toSet());
     }
 
     /**

@@ -6,6 +6,7 @@ import com.projectmaster.app.project.dto.CreateProjectRequest;
 import com.projectmaster.app.project.dto.ProjectDto;
 import com.projectmaster.app.project.dto.ProjectWorkflowResponse;
 import com.projectmaster.app.project.dto.UpdateProjectRequest;
+import com.projectmaster.app.project.service.ProjectScheduleCalculator;
 import com.projectmaster.app.project.service.ProjectService;
 import com.projectmaster.app.security.service.CustomUserDetailsService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,6 +38,7 @@ import java.util.UUID;
 public class ProjectController {
 
     private final ProjectService projectService;
+    private final ProjectScheduleCalculator projectScheduleCalculator;
 
     /**
      * Create a new project
@@ -290,6 +292,39 @@ public class ProjectController {
                 .success(true)
                 .message("Project workflow retrieved successfully")
                 .data(workflow)
+                .build();
+        
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Recalculate project schedule for non-completed items
+     */
+    @Operation(
+        summary = "Recalculate project schedule",
+        description = "Recalculates start and end dates for all non-completed stages, tasks, and steps. " +
+                     "Useful when workflow rebuild is required or dependencies have changed. " +
+                     "Completed items are not recalculated to preserve historical data."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Schedule recalculated successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Project not found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access denied")
+    })
+    @PostMapping("/{projectId}/recalculate-schedule")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PROJECT_MANAGER')")
+    public ResponseEntity<ApiResponse<String>> recalculateProjectSchedule(
+            @Parameter(description = "Project ID", required = true) @PathVariable UUID projectId) {
+        
+        log.info("Recalculating schedule for project: {}", projectId);
+        
+        // Recalculate the schedule
+        projectScheduleCalculator.recalculateProjectSchedule(projectId);
+        
+        ApiResponse<String> response = ApiResponse.<String>builder()
+                .success(true)
+                .message("Project schedule recalculated successfully. All non-completed items have been rescheduled.")
+                .data("Schedule recalculation completed")
                 .build();
         
         return ResponseEntity.ok(response);

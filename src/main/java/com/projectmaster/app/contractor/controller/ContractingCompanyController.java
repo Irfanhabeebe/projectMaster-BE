@@ -3,15 +3,21 @@ package com.projectmaster.app.contractor.controller;
 import com.projectmaster.app.common.dto.ApiResponse;
 import com.projectmaster.app.contractor.dto.CreateContractingCompanyRequest;
 import com.projectmaster.app.contractor.dto.ContractingCompanyResponse;
+import com.projectmaster.app.contractor.dto.ContractingCompanySearchRequest;
 import com.projectmaster.app.contractor.service.ContractingCompanyService;
 import com.projectmaster.app.user.entity.User;
 import com.projectmaster.app.user.service.UserService;
 import com.projectmaster.app.security.service.CustomUserDetailsService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -113,19 +119,95 @@ public class ContractingCompanyController {
     }
 
     /**
-     * Search contracting companies by name
+     * Search contracting companies with advanced filtering (POST - Recommended)
      */
-    @GetMapping("/search")
-    public ResponseEntity<ApiResponse<List<ContractingCompanyResponse>>> searchContractingCompanies(
-            @RequestParam String name) {
+    @PostMapping("/search")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PROJECT_MANAGER') or hasRole('TRADIE')")
+    @Operation(summary = "Search contracting companies with advanced filtering",
+               description = "Search contracting companies with advanced filtering, sorting, and pagination support. " +
+                           "Supports filtering by specialty type, verification status, and active status.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200", 
+                description = "Search completed successfully",
+                content = @io.swagger.v3.oas.annotations.media.Content(
+                    mediaType = "application/json",
+                    schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ApiResponse.class),
+                    examples = @io.swagger.v3.oas.annotations.media.ExampleObject(
+                        name = "Search Response",
+                        value = """
+                        {
+                            "success": true,
+                            "message": "Search completed successfully",
+                            "data": {
+                                "content": [
+                                    {
+                                        "id": "123e4567-e89b-12d3-a456-426614174000",
+                                        "name": "ABC Construction",
+                                        "address": "123 Main St, Sydney NSW 2000",
+                                        "abn": "12345678910",
+                                        "email": "info@abcconstruction.com",
+                                        "phone": "0412345678",
+                                        "contactPerson": "John Smith",
+                                        "active": true,
+                                        "verified": true,
+                                        "createdAt": "2024-01-15T10:30:00",
+                                        "updatedAt": "2024-01-15T10:30:00",
+                                        "specialties": [
+                                            {
+                                                "id": "123e4567-e89b-12d3-a456-426614174001",
+                                                "specialtyType": "Electrical",
+                                                "specialtyName": "Residential Electrical",
+                                                "active": true,
+                                                "yearsExperience": 5,
+                                                "certificationDetails": "Licensed Electrician",
+                                                "notes": "Specializes in residential electrical work"
+                                            }
+                                        ],
+                                        "users": [
+                                            {
+                                                "id": "123e4567-e89b-12d3-a456-426614174002",
+                                                "firstName": "Admin",
+                                                "lastName": "ABC Construction",
+                                                "email": "admin@abcconstruction.com",
+                                                "role": "admin-tradie",
+                                                "active": true,
+                                                "assignedDate": "2024-01-15"
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "totalElements": 1,
+                                "totalPages": 1,
+                                "size": 20,
+                                "number": 0
+                            }
+                        }
+                        """
+                    )
+                )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid search parameters"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden")
+    })
+    public ResponseEntity<ApiResponse<Page<ContractingCompanyResponse>>> searchContractingCompaniesAdvanced(
+            @Parameter(description = "Search criteria and filters", required = true)
+            @RequestBody ContractingCompanySearchRequest searchRequest) {
         try {
-            List<ContractingCompanyResponse> companies = contractingCompanyService.searchContractingCompaniesByName(name);
-            return ResponseEntity.ok(ApiResponse.success(companies, 
-                "Contracting companies search completed successfully"));
+            Page<ContractingCompanyResponse> companies = contractingCompanyService.searchContractingCompanies(searchRequest);
+            return ResponseEntity.ok(ApiResponse.<Page<ContractingCompanyResponse>>builder()
+                    .success(true)
+                    .message("Search completed successfully")
+                    .data(companies)
+                    .build());
         } catch (Exception e) {
-            log.error("Error searching contracting companies by name: {}", name, e);
+            log.error("Error searching contracting companies with advanced filters", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error("Failed to search contracting companies: " + e.getMessage()));
+                    .body(ApiResponse.<Page<ContractingCompanyResponse>>builder()
+                            .success(false)
+                            .message("Failed to search contracting companies: " + e.getMessage())
+                            .build());
         }
     }
 

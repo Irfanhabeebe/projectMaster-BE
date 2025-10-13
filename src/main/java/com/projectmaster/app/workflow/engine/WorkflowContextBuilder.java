@@ -19,6 +19,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @Component
 @Slf4j
 @RequiredArgsConstructor
@@ -82,6 +85,13 @@ public class WorkflowContextBuilder {
             projectStep = projectStepAssignment.getProjectStep();
         }
         
+        // Merge metadata and completion data
+        Map<String, Object> contextMetadata = request.getMetadata() != null ? 
+                new HashMap<>(request.getMetadata()) : new HashMap<>();
+        if (request.getCompletionData() != null) {
+            contextMetadata.putAll(request.getCompletionData());
+        }
+        
         return WorkflowExecutionContext.builder()
                 .project(project)
                 .projectStage(projectStage)
@@ -93,7 +103,7 @@ public class WorkflowContextBuilder {
                 .workflowStep(projectStep != null ? projectStep.getWorkflowStep() : null)
                 .action(request.getAction())
                 .user(user)
-                .metadata(request.getMetadata())
+                .metadata(contextMetadata)
                 .build();
     }
 }

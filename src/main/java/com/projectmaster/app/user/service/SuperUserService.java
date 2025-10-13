@@ -30,6 +30,7 @@ public class SuperUserService {
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
     private final SimplePasswordEncoder passwordEncoder;
+    private final com.projectmaster.app.core.service.HolidayService holidayService;
 
     /**
      * Create a company with an admin user - only accessible by super users
@@ -65,6 +66,15 @@ public class SuperUserService {
 
         Company savedCompany = companyRepository.save(company);
         log.info("Company created successfully with ID: {}", savedCompany.getId());
+
+        // Copy master holidays to the new company
+        try {
+            holidayService.copyMasterHolidaysToCompany(savedCompany.getId());
+            log.info("Successfully copied master holidays to company: {}", savedCompany.getName());
+        } catch (Exception e) {
+            log.error("Failed to copy master holidays to company: {}", savedCompany.getName(), e);
+            // Don't throw exception here to avoid rolling back company creation
+        }
 
         // Create admin user for the company
         User adminUser = User.builder()

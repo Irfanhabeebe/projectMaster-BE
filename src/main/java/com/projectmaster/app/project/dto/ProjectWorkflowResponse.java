@@ -34,6 +34,9 @@ public class ProjectWorkflowResponse {
     @Schema(description = "Project progress percentage")
     private Integer progressPercentage;
 
+    @Schema(description = "Flag indicating if workflow rebuild is required")
+    private Boolean workflowRebuildRequired;
+
     @Schema(description = "List of project stages")
     private List<ProjectStageResponse> stages;
 
@@ -106,9 +109,6 @@ public class ProjectWorkflowResponse {
         @Schema(description = "Task status")
         private StageStatus status;
 
-        @Schema(description = "Task order index")
-        private Integer orderIndex;
-
         @Schema(description = "Estimated days")
         private Integer estimatedDays;
 
@@ -129,12 +129,6 @@ public class ProjectWorkflowResponse {
 
         @Schema(description = "Quality check passed")
         private Boolean qualityCheckPassed;
-
-        @Schema(description = "Required skills (JSON array)")
-        private String requiredSkills;
-
-        @Schema(description = "Requirements (JSON object)")
-        private String requirements;
 
         @Schema(description = "List of task steps")
         private List<ProjectStepResponse> steps;
@@ -162,9 +156,6 @@ public class ProjectWorkflowResponse {
         @Schema(description = "Step status")
         private com.projectmaster.app.project.entity.ProjectStep.StepExecutionStatus status;
 
-        @Schema(description = "Step order index")
-        private Integer orderIndex;
-
         @Schema(description = "Estimated days")
         private Integer estimatedDays;
 
@@ -185,12 +176,6 @@ public class ProjectWorkflowResponse {
 
         @Schema(description = "Quality check passed")
         private Boolean qualityCheckPassed;
-
-        @Schema(description = "Required skills (JSON array)")
-        private String requiredSkills;
-
-        @Schema(description = "Requirements (JSON object)")
-        private String requirements;
 
         @Schema(description = "Specialty required for this step")
         private SpecialtyResponse specialty;
