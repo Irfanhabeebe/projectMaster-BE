@@ -1,12 +1,19 @@
 package com.projectmaster.app.common.exception;
 
-public class EntityNotFoundException extends ProjectMasterException {
-    
-    public EntityNotFoundException(String entityName, Object id) {
-        super(String.format("%s with id %s not found", entityName, id), "ENTITY_NOT_FOUND");
-    }
+/**
+ * Exception thrown when an entity is not found in the database
+ */
+public class EntityNotFoundException extends RuntimeException {
     
     public EntityNotFoundException(String message) {
-        super(message, "ENTITY_NOT_FOUND");
+        super(message);
+    }
+    
+    public EntityNotFoundException(String message, Throwable cause) {
+        super(message, cause);
+    }
+    
+    public EntityNotFoundException(String entityType, Object id) {
+        super(String.format("%s not found with id: %s", entityType, id));
     }
 }

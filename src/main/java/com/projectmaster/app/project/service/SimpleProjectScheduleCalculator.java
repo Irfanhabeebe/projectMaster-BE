@@ -9,7 +9,6 @@ import com.projectmaster.app.project.repository.ProjectTaskRepository;
 import com.projectmaster.app.project.repository.ProjectStepRepository;
 import com.projectmaster.app.workflow.entity.ProjectDependency;
 import com.projectmaster.app.workflow.entity.DependencyEntityType;
-import com.projectmaster.app.workflow.entity.DependencyType;
 import com.projectmaster.app.workflow.repository.ProjectDependencyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -287,9 +286,16 @@ public class SimpleProjectScheduleCalculator {
             
             List<ProjectStep> taskSteps = stepsByTask.get(task.getId());
             if (taskSteps == null || taskSteps.isEmpty()) {
-                // Task has no steps - set dates to project start date
-                task.setPlannedStartDate(projectStartDate);
-                task.setPlannedEndDate(projectStartDate);
+                // Task has no steps - preserve existing dates if set, otherwise use project start
+                // This allows adhoc tasks to keep their manually set dates until steps are added
+                if (task.getPlannedStartDate() == null) {
+                    task.setPlannedStartDate(projectStartDate);
+                }
+                if (task.getPlannedEndDate() == null) {
+                    task.setPlannedEndDate(projectStartDate);
+                }
+                log.debug("Task {} has no steps - preserved existing dates (start: {}, end: {})", 
+                        task.getId(), task.getPlannedStartDate(), task.getPlannedEndDate());
                 continue;
             }
             

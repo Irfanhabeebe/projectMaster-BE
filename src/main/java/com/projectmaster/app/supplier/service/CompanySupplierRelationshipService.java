@@ -146,13 +146,14 @@ public class CompanySupplierRelationshipService {
 
     /**
      * Get suppliers for a company by category
+     * Returns only active suppliers with lightweight response (no preferred categories)
      */
     public List<CompanySupplierRelationshipResponse> getSuppliersByCategory(UUID companyId, UUID categoryId) {
-        log.debug("Retrieving suppliers for company {} and category {}", companyId, categoryId);
+        log.debug("Retrieving active suppliers for company {} and category {}", companyId, categoryId);
         List<CompanySupplierRelationship> relationships = relationshipRepository
                 .findByCompanyIdAndCategoryId(companyId, categoryId);
         return relationships.stream()
-                .map(this::convertToResponse)
+                .map(this::convertToLightResponse)  // Use lightweight conversion (no preferred categories)
                 .collect(Collectors.toList());
     }
 
@@ -289,6 +290,35 @@ public class CompanySupplierRelationshipService {
     /**
      * Convert relationship entity to response DTO
      */
+    /**
+     * Convert relationship to lightweight response (excludes preferred categories for better performance)
+     */
+    private CompanySupplierRelationshipResponse convertToLightResponse(CompanySupplierRelationship relationship) {
+        return CompanySupplierRelationshipResponse.builder()
+                .id(relationship.getId())
+                .companyId(relationship.getCompany().getId())
+                .companyName(relationship.getCompany().getName())
+                .supplierId(relationship.getSupplier().getId())
+                .supplierName(relationship.getSupplier().getName())
+                .supplierType(relationship.getSupplier().getSupplierType())
+                .active(relationship.getActive())
+                .preferred(relationship.getPreferred())
+                .accountNumber(relationship.getAccountNumber())
+                .paymentTerms(relationship.getPaymentTerms())
+                .creditLimit(relationship.getCreditLimit())
+                .discountRate(relationship.getDiscountRate())
+                .contractStartDate(relationship.getContractStartDate())
+                .contractEndDate(relationship.getContractEndDate())
+                .deliveryInstructions(relationship.getDeliveryInstructions())
+                .notes(relationship.getNotes())
+                .rating(relationship.getRating())
+                .preferredCategories(null)  // Excluded for lightweight response
+                .addedByUserName(relationship.getAddedByUser().getFirstName() + " " + relationship.getAddedByUser().getLastName())
+                .createdAt(relationship.getCreatedAt())
+                .updatedAt(relationship.getUpdatedAt())
+                .build();
+    }
+
     private CompanySupplierRelationshipResponse convertToResponse(CompanySupplierRelationship relationship) {
         // Get preferred categories for this relationship
         List<CompanySupplierCategory> categories = companyCategoryRepository

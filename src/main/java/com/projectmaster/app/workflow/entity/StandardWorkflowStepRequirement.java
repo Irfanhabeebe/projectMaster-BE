@@ -35,4 +35,8 @@ public class StandardWorkflowStepRequirement extends BaseEntity {
     @Builder.Default
     @Column(name = "active", nullable = false)
     private Boolean active = true;
+    
+    @Builder.Default
+    @Column(name = "customer_selectable", nullable = false)
+    private Boolean customerSelectable = true;
 }

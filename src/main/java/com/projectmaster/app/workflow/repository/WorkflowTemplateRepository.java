@@ -41,6 +41,15 @@ public interface WorkflowTemplateRepository extends JpaRepository<WorkflowTempla
     Optional<WorkflowTemplate> findByCompanyIdAndIsDefaultTrueAndActiveTrue(UUID companyId);
     
     /**
+     * Find workflow templates by company and category with pagination
+     */
+    @Query("SELECT wt FROM WorkflowTemplate wt WHERE wt.company.id = :companyId AND " +
+           "wt.category = :category AND wt.active = true")
+    Page<WorkflowTemplate> findByCompanyIdAndCategoryAndActiveTrue(@Param("companyId") UUID companyId, 
+                                                                  @Param("category") String category, 
+                                                                  Pageable pageable);
+    
+    /**
      * Find workflow templates by company and category
      */
     List<WorkflowTemplate> findByCompanyIdAndCategoryAndActiveTrue(UUID companyId, String category);

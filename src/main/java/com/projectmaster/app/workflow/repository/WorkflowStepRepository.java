@@ -44,4 +44,10 @@ public interface WorkflowStepRepository extends JpaRepository<WorkflowStep, UUID
     @Query("SELECT ws FROM WorkflowStep ws WHERE ws.workflowTask.workflowStage.workflowTemplate.id = :templateId " +
            "ORDER BY ws.workflowTask.workflowStage.createdAt, ws.workflowTask.createdAt, ws.createdAt")
     List<WorkflowStep> findByWorkflowTemplateId(@Param("templateId") UUID templateId);
+    
+    /**
+     * Find steps by workflow task (through stage and template)
+     */
+    @Query("SELECT ws FROM WorkflowStep ws WHERE ws.workflowTask.workflowStage.workflowTemplate.id = :templateId")
+    List<WorkflowStep> findByWorkflowTaskWorkflowStageWorkflowTemplateId(@Param("templateId") UUID templateId);
 }

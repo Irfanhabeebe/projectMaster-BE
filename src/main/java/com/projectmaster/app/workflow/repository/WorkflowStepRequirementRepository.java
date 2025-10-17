@@ -59,4 +59,21 @@ public interface WorkflowStepRequirementRepository extends JpaRepository<Workflo
      * Delete all requirements for a workflow step
      */
     void deleteByWorkflowStepId(UUID workflowStepId);
+    
+    /**
+     * Find requirement by workflow step, category, and item name for comparison
+     */
+    @Query("SELECT wsr FROM WorkflowStepRequirement wsr " +
+           "WHERE wsr.workflowStep.id = :workflowStepId AND " +
+           "wsr.category.id = :categoryId AND " +
+           "wsr.itemName = :itemName")
+    WorkflowStepRequirement findByWorkflowStepIdAndCategoryIdAndItemName(
+        @Param("workflowStepId") UUID workflowStepId,
+        @Param("categoryId") UUID categoryId,
+        @Param("itemName") String itemName);
+    
+    /**
+     * Find all requirements for a workflow step for bulk operations
+     */
+    List<WorkflowStepRequirement> findByWorkflowStepId(UUID workflowStepId);
 }

@@ -80,7 +80,7 @@ public class ProjectStage extends BaseEntity {
     private Integer workflowStageVersion;
 
     @OneToMany(mappedBy = "projectStage", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @OrderBy("orderIndex")
+    @OrderBy("createdAt")
     @Builder.Default
     private List<ProjectTask> tasks = new ArrayList<>();
 }

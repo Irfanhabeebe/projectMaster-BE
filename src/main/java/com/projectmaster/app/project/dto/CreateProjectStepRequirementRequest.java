@@ -67,4 +67,8 @@ public class CreateProjectStepRequirementRequest {
 
     @Schema(description = "Delivery instructions", example = "Deliver to site office")
     private String deliveryInstructions;
+    
+    @Schema(description = "Whether customer can modify this requirement", example = "true")
+    @Builder.Default
+    private Boolean customerSelectable = true;
 }

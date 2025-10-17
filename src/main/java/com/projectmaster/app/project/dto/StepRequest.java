@@ -17,19 +17,16 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Request DTO for creating adhoc steps in a project.
- * Adhoc steps are manually added by project managers or admins and are not based on workflow templates.
+ * Unified request DTO for creating and updating project steps.
+ * Used for both adhoc and template-based steps.
+ * The parent task ID is provided via path parameter, not in request body.
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Request to create an adhoc project step")
-public class CreateAdhocStepRequest {
-
-    @NotNull(message = "Project task ID is required")
-    @Schema(description = "ID of the project task this step belongs to", required = true)
-    private UUID projectTaskId;
+@Schema(description = "Request to create or update a project step")
+public class StepRequest {
 
     @NotBlank(message = "Step name is required")
     @Schema(description = "Name of the step", required = true, example = "Install Custom Feature")
@@ -54,13 +51,16 @@ public class CreateAdhocStepRequest {
     @Schema(description = "Additional notes for the step")
     private String notes;
 
-    @Schema(description = "Assignment for this step (crew or contractor) - only one active assignment allowed")
+    @Schema(description = "Assignment for this step (crew or contractor) - only one active assignment allowed. " +
+                         "If provided in update, existing assignments will be replaced.")
     private StepAssignmentRequest assignment;
 
-    @Schema(description = "List of dependencies - other steps that must be completed before this step can start")
+    @Schema(description = "List of dependencies - other entities that must be completed before this step can start. " +
+                         "If provided in update, existing 'depends on' relationships will be replaced.")
     private List<StepDependencyRequest> dependsOn;
 
-    @Schema(description = "List of dependent steps - other steps that depend on this step being completed")
+    @Schema(description = "List of dependent steps - other entities that depend on this step being completed. " +
+                         "If provided in update, existing 'dependent' relationships will be replaced.")
     private List<StepDependencyRequest> dependents;
 
     /**

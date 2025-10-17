@@ -1,6 +1,5 @@
 package com.projectmaster.app.project.service;
 
-import com.projectmaster.app.project.dto.CreateProjectStepRequirementRequest;
 import com.projectmaster.app.project.dto.UpdateProjectStepRequirementRequest;
 import com.projectmaster.app.project.entity.ProjectStep;
 import com.projectmaster.app.project.entity.ProjectStepRequirement;
@@ -15,8 +14,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -53,7 +58,7 @@ public class StepRequirementCopyService {
                     .itemName(workflowReq.getItemName())
                     .brand(workflowReq.getBrand())
                     .model(workflowReq.getModel())
-                    .quantity(0.0) // Default to 0 when created from template
+                    .quantity(workflowReq.getDefaultQuantity() != null ? workflowReq.getDefaultQuantity() : BigDecimal.ZERO) // Use template default or 0
                     .unit(workflowReq.getUnit())
                     .estimatedCost(workflowReq.getEstimatedCost())
                     .procurementType(convertProcurementType(workflowReq.getProcurementType()))
@@ -63,6 +68,7 @@ public class StepRequirementCopyService {
                     .status(ProjectStepRequirement.RequirementStatus.PENDING)
                     .isTemplateCopied(true)                // Mark as copied from template
                     .displayOrder(workflowReq.getDisplayOrder())
+                    .customerSelectable(workflowReq.getCustomerSelectable()) // Copy customer selectable flag
                     .build();
             
             projectStepRequirementRepository.save(projectReq);
@@ -74,56 +80,124 @@ public class StepRequirementCopyService {
                 workflowRequirements.size(), workflowStep.getId(), projectStep.getId());
     }
 
+
     /**
-     * Add new project-specific requirements (not from template)
+     * Sync project step requirements - smart update/create/delete based on category and item name
      */
-    public ProjectStepRequirement addProjectSpecificRequirement(
-            UUID projectStepId, CreateProjectStepRequirementRequest request) {
+    public List<ProjectStepRequirement> syncProjectStepRequirements(
+            UUID projectStepId, List<UpdateProjectStepRequirementRequest> requests) {
+        
+        log.info("Syncing requirements for project step: {}", projectStepId);
         
         ProjectStep projectStep = projectStepRepository.findById(projectStepId)
                 .orElseThrow(() -> new EntityNotFoundException("Project step not found"));
         
-        ProjectStepRequirement requirement = ProjectStepRequirement.builder()
-                .projectStep(projectStep)
-                .workflowStepRequirement(null) // Not from template
-                .category(request.getCategory())
-                .supplier(request.getSupplier())
-                .itemName(request.getItemName())
-                .brand(request.getBrand())
-                .model(request.getModel())
-                .quantity(request.getQuantity())
-                .unit(request.getUnit())
-                .estimatedCost(request.getEstimatedCost())
-                .procurementType(request.getProcurementType())
-                .isOptional(request.getIsOptional() != null ? request.getIsOptional() : false)
-                .notes(request.getNotes())
-                .supplierItemCode(request.getSupplierItemCode())
-                .status(ProjectStepRequirement.RequirementStatus.PENDING)
-                .isTemplateCopied(false) // Project-specific addition
-                .displayOrder(getNextDisplayOrder(projectStepId))
-                .build();
+        // Get all existing requirements for this step
+        List<ProjectStepRequirement> existingRequirements = projectStepRequirementRepository
+                .findByProjectStepIdOrderByDisplayOrder(projectStepId);
         
-        return projectStepRequirementRepository.save(requirement);
-    }
-
-    /**
-     * Update an existing project step requirement
-     */
-    public ProjectStepRequirement updateProjectStepRequirement(
-            UUID requirementId, UpdateProjectStepRequirementRequest request) {
+        // Create a map of existing requirements by category+itemName for quick lookup
+        Map<String, ProjectStepRequirement> existingMap = existingRequirements.stream()
+                .collect(Collectors.toMap(
+                    req -> createRequirementKey(req.getCategory().getId(), req.getItemName()),
+                    req -> req
+                ));
         
-        ProjectStepRequirement requirement = projectStepRequirementRepository.findById(requirementId)
-                .orElseThrow(() -> new EntityNotFoundException("Project step requirement not found"));
+        // Track which requirements were in the request
+        Set<String> requestedKeys = new HashSet<>();
+        List<ProjectStepRequirement> result = new ArrayList<>();
         
-        // Update fields
-        if (request.getCategory() != null) {
-            requirement.setCategory(request.getCategory());
+        // Process each request - update existing or create new
+        for (UpdateProjectStepRequirementRequest request : requests) {
+            if (request.getCategory() == null || request.getItemName() == null || request.getItemName().isBlank()) {
+                log.warn("Skipping requirement with null category or empty item name");
+                continue;
+            }
+            
+            String key = createRequirementKey(request.getCategory().getId(), request.getItemName());
+            requestedKeys.add(key);
+            
+            ProjectStepRequirement requirement = existingMap.get(key);
+            
+            if (requirement != null) {
+                // Update existing requirement
+                log.debug("Updating existing requirement: {} - {}", 
+                        request.getCategory().getName(), request.getItemName());
+                updateRequirementFromRequest(requirement, request);
+            } else {
+                // Create new requirement
+                log.debug("Creating new requirement: {} - {}", 
+                        request.getCategory().getName(), request.getItemName());
+                requirement = ProjectStepRequirement.builder()
+                        .projectStep(projectStep)
+                        .workflowStepRequirement(null) // Project-specific
+                        .category(request.getCategory())
+                        .supplier(request.getSupplier())
+                        .itemName(request.getItemName())
+                        .brand(request.getBrand())
+                        .model(request.getModel())
+                        .quantity(request.getQuantity() != null ? request.getQuantity() : BigDecimal.ZERO)
+                        .unit(request.getUnit())
+                        .estimatedCost(request.getEstimatedCost())
+                        .actualCost(request.getActualCost())
+                        .procurementType(request.getProcurementType() != null ? 
+                                request.getProcurementType() : ProjectStepRequirement.ProcurementType.BUY) // Default to BUY if null
+                        .isOptional(request.getIsOptional() != null ? request.getIsOptional() : false)
+                        .notes(request.getNotes())
+                        .supplierItemCode(request.getSupplierItemCode())
+                        .supplierQuoteNumber(request.getSupplierQuoteNumber())
+                        .quoteExpiryDate(request.getQuoteExpiryDate())
+                        .requiredDeliveryDate(request.getRequiredDeliveryDate())
+                        .deliveryInstructions(request.getDeliveryInstructions())
+                        .status(request.getStatus() != null ? 
+                                request.getStatus() : ProjectStepRequirement.RequirementStatus.PENDING)
+                        .isTemplateCopied(false)
+                        .displayOrder(getNextDisplayOrder(projectStepId))
+                        .customerSelectable(request.getCustomerSelectable() != null ? 
+                                request.getCustomerSelectable() : true) // Default to true if not specified
+                        .build();
+            }
+            
+            requirement = projectStepRequirementRepository.save(requirement);
+            result.add(requirement);
         }
+        
+        // Delete requirements that are in database but not in request
+        List<ProjectStepRequirement> toDelete = existingRequirements.stream()
+                .filter(req -> !requestedKeys.contains(
+                        createRequirementKey(req.getCategory().getId(), req.getItemName())))
+                .collect(Collectors.toList());
+        
+        if (!toDelete.isEmpty()) {
+            log.info("Deleting {} requirements not present in request", toDelete.size());
+            toDelete.forEach(req -> {
+                log.debug("Deleting requirement: {} - {}", 
+                        req.getCategory().getName(), req.getItemName());
+                projectStepRequirementRepository.delete(req);
+            });
+        }
+        
+        log.info("Sync complete - {} requirements in result, {} deleted", 
+                result.size(), toDelete.size());
+        
+        return result;
+    }
+    
+    /**
+     * Create a unique key for requirement matching based on category ID and item name
+     */
+    private String createRequirementKey(UUID categoryId, String itemName) {
+        return categoryId.toString() + ":" + itemName.trim().toLowerCase();
+    }
+    
+    /**
+     * Update requirement fields from request
+     */
+    private void updateRequirementFromRequest(
+            ProjectStepRequirement requirement, UpdateProjectStepRequirementRequest request) {
+        
         if (request.getSupplier() != null) {
             requirement.setSupplier(request.getSupplier());
-        }
-        if (request.getItemName() != null) {
-            requirement.setItemName(request.getItemName());
         }
         if (request.getBrand() != null) {
             requirement.setBrand(request.getBrand());
@@ -143,8 +217,11 @@ public class StepRequirementCopyService {
         if (request.getActualCost() != null) {
             requirement.setActualCost(request.getActualCost());
         }
+        // Default to BUY if not specified, otherwise use provided value
         if (request.getProcurementType() != null) {
             requirement.setProcurementType(request.getProcurementType());
+        } else {
+            requirement.setProcurementType(ProjectStepRequirement.ProcurementType.BUY);
         }
         if (request.getStatus() != null) {
             requirement.setStatus(request.getStatus());
@@ -170,8 +247,9 @@ public class StepRequirementCopyService {
         if (request.getDeliveryInstructions() != null) {
             requirement.setDeliveryInstructions(request.getDeliveryInstructions());
         }
-        
-        return projectStepRequirementRepository.save(requirement);
+        if (request.getCustomerSelectable() != null) {
+            requirement.setCustomerSelectable(request.getCustomerSelectable());
+        }
     }
 
     /**
@@ -218,6 +296,44 @@ public class StepRequirementCopyService {
      */
     public List<ProjectStepRequirement> getProjectSpecificRequirements(UUID projectStepId) {
         return projectStepRequirementRepository.findByProjectStepIdAndIsTemplateCopiedFalseOrderByDisplayOrder(projectStepId);
+    }
+
+    /**
+     * Convert ProjectStepRequirement entity to response DTO
+     */
+    public com.projectmaster.app.project.dto.ProjectStepRequirementResponse convertToResponse(ProjectStepRequirement requirement) {
+        return com.projectmaster.app.project.dto.ProjectStepRequirementResponse.builder()
+                .id(requirement.getId())
+                .projectStepId(requirement.getProjectStep().getId())
+                .workflowStepRequirementId(requirement.getWorkflowStepRequirement() != null ? 
+                        requirement.getWorkflowStepRequirement().getId() : null)
+                .categoryId(requirement.getCategory() != null ? requirement.getCategory().getId() : null)
+                .categoryName(requirement.getCategory() != null ? requirement.getCategory().getName() : null)
+                .categoryGroup(requirement.getCategory() != null ? requirement.getCategory().getCategoryGroup() : null)
+                .supplierId(requirement.getSupplier() != null ? requirement.getSupplier().getId() : null)
+                .supplierName(requirement.getSupplier() != null ? requirement.getSupplier().getName() : null)
+                .itemName(requirement.getItemName())
+                .brand(requirement.getBrand())
+                .model(requirement.getModel())
+                .quantity(requirement.getQuantity())
+                .unit(requirement.getUnit())
+                .estimatedCost(requirement.getEstimatedCost())
+                .actualCost(requirement.getActualCost())
+                .procurementType(requirement.getProcurementType())
+                .status(requirement.getStatus())
+                .isOptional(requirement.getIsOptional())
+                .notes(requirement.getNotes())
+                .supplierItemCode(requirement.getSupplierItemCode())
+                .supplierQuoteNumber(requirement.getSupplierQuoteNumber())
+                .quoteExpiryDate(requirement.getQuoteExpiryDate())
+                .requiredDeliveryDate(requirement.getRequiredDeliveryDate())
+                .deliveryInstructions(requirement.getDeliveryInstructions())
+                .isTemplateCopied(requirement.getIsTemplateCopied())
+                .displayOrder(requirement.getDisplayOrder())
+                .createdAt(requirement.getCreatedAt())
+                .updatedAt(requirement.getUpdatedAt())
+                .customerSelectable(requirement.getCustomerSelectable())
+                .build();
     }
 
     /**

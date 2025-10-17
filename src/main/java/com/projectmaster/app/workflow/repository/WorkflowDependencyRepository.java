@@ -36,6 +36,16 @@ public interface WorkflowDependencyRepository extends JpaRepository<WorkflowDepe
         DependencyEntityType dependsOnEntityType, UUID dependsOnEntityId);
     
     /**
+     * Delete all dependencies for a workflow template
+     */
+    void deleteByWorkflowTemplateId(UUID workflowTemplateId);
+    
+    /**
+     * Delete dependencies by dependent entity type and ID
+     */
+    void deleteByDependentEntityTypeAndDependentEntityId(DependencyEntityType dependentEntityType, UUID dependentEntityId);
+    
+    /**
      * Find all dependencies for a specific entity (both as dependent and dependency)
      */
     @Query("SELECT wd FROM WorkflowDependency wd WHERE " +

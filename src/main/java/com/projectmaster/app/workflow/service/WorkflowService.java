@@ -28,6 +28,10 @@ import com.projectmaster.app.workflow.engine.WorkflowEngine;
 import com.projectmaster.app.common.enums.UserRole;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -238,6 +242,29 @@ public class WorkflowService {
 
     
     /**
+     * Get workflow templates by company ID with pagination, search, and filtering
+     */
+    @Transactional(readOnly = true)
+    public Page<WorkflowTemplateDto> getWorkflowTemplatesByCompanyWithPagination(
+            UUID companyId, String search, String category, int page, int size, String sortBy, String sortDir) {
+        log.debug("Getting workflow templates for company: {} with search: {}, category: {}, page: {}, size: {}", 
+                 companyId, search, category, page, size);
+        
+        Pageable pageable = PageRequest.of(page, size, Sort.Direction.fromString(sortDir), sortBy);
+        Page<WorkflowTemplate> templates;
+        
+        if (search != null && !search.trim().isEmpty()) {
+            templates = workflowTemplateRepository.findByCompanyIdWithSearch(companyId, search.trim(), pageable);
+        } else if (category != null && !category.trim().isEmpty()) {
+            templates = workflowTemplateRepository.findByCompanyIdAndCategoryAndActiveTrue(companyId, category.trim(), pageable);
+        } else {
+            templates = workflowTemplateRepository.findByCompanyId(companyId, pageable);
+        }
+        
+        return templates.map(this::convertToDto);
+    }
+    
+    /**
      * Get workflow templates by company ID
      */
     @Transactional(readOnly = true)
@@ -408,6 +435,7 @@ public class WorkflowService {
                 .templateNotes(requirement.getTemplateNotes())
                 .createdAt(requirement.getCreatedAt())
                 .updatedAt(requirement.getUpdatedAt())
+                .customerSelectable(requirement.getCustomerSelectable())
                 .build();
     }
     
@@ -419,15 +447,42 @@ public class WorkflowService {
                 .id(dependency.getId())
                 .dependentEntityType(dependency.getDependentEntityType().name())
                 .dependentEntityId(dependency.getDependentEntityId())
-                .dependentEntityName("") // Would need to fetch entity name based on type and ID
+                .dependentEntityName(getEntityName(dependency.getDependentEntityType(), dependency.getDependentEntityId()))
                 .dependsOnEntityType(dependency.getDependsOnEntityType().name())
                 .dependsOnEntityId(dependency.getDependsOnEntityId())
-                .dependsOnEntityName("") // Would need to fetch entity name based on type and ID
+                .dependsOnEntityName(getEntityName(dependency.getDependsOnEntityType(), dependency.getDependsOnEntityId()))
                 .dependencyType(dependency.getDependencyType().name())
                 .lagDays(dependency.getLagDays())
                 .createdAt(dependency.getCreatedAt())
                 .updatedAt(dependency.getUpdatedAt())
                 .build();
+    }
+    
+    /**
+     * Get entity name based on entity type and ID
+     */
+    private String getEntityName(DependencyEntityType entityType, UUID entityId) {
+        try {
+            switch (entityType) {
+                case STAGE:
+                    return workflowStageRepository.findById(entityId)
+                            .map(WorkflowStage::getName)
+                            .orElse("Unknown Stage");
+                case TASK:
+                    return workflowTaskRepository.findById(entityId)
+                            .map(WorkflowTask::getName)
+                            .orElse("Unknown Task");
+                case STEP:
+                    return workflowStepRepository.findById(entityId)
+                            .map(WorkflowStep::getName)
+                            .orElse("Unknown Step");
+                default:
+                    return "Unknown Entity";
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get entity name for {} with ID {}: {}", entityType, entityId, e.getMessage());
+            return "Unknown Entity";
+        }
     }
     
     /**

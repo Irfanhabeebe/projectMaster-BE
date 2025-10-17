@@ -45,7 +45,7 @@ public class WorkflowStage extends BaseEntity {
     private Integer version = 1;
 
     @OneToMany(mappedBy = "workflowStage", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @OrderBy("orderIndex")
+    @OrderBy("createdAt")
     private List<WorkflowTask> tasks;
 
     // Reference to the standard workflow stage this was copied from

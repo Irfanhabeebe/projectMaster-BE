@@ -2,12 +2,9 @@ package com.projectmaster.app.project.entity;
 
 import com.projectmaster.app.common.entity.BaseEntity;
 import com.projectmaster.app.common.enums.StageStatus;
-import com.projectmaster.app.common.converter.JsonbConverter;
 import com.projectmaster.app.workflow.entity.WorkflowTask;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -28,7 +25,7 @@ public class ProjectTask extends BaseEntity {
     private ProjectStage projectStage;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "workflow_task_id", nullable = false)
+    @JoinColumn(name = "workflow_task_id")
     private WorkflowTask workflowTask;
 
     @Column(name = "name", nullable = false)
@@ -67,6 +64,10 @@ public class ProjectTask extends BaseEntity {
     // Version tracking
     @Column(name = "workflow_task_version")
     private Integer workflowTaskVersion;
+    
+    @Builder.Default
+    @Column(name = "adhoc_task_flag", nullable = false)
+    private Boolean adhocTaskFlag = false;
 
     @OneToMany(mappedBy = "projectTask", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @OrderBy("createdAt")

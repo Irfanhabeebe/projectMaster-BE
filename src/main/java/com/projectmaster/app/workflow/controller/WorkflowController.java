@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -223,19 +224,33 @@ public class WorkflowController {
     }
     
     /**
-     * Get all workflow templates available for the user's company
+     * Get all workflow templates available for the user's company with search and pagination
      */
     @GetMapping("/templates")
     @PreAuthorize("hasRole('PROJECT_MANAGER') or hasRole('ADMIN') or hasRole('USER')")
-    public ResponseEntity<ApiResponse<List<WorkflowTemplateDto>>> getCompanyWorkflowTemplates(
+    @Operation(summary = "Get workflow templates", 
+               description = "Get workflow templates with search, pagination, and category filtering")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Templates retrieved successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access denied")
+    })
+    public ResponseEntity<ApiResponse<Page<WorkflowTemplateDto>>> getCompanyWorkflowTemplates(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String category,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "name") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir,
             HttpServletRequest request) {
         
-        log.debug("Getting workflow templates for user's company");
+        log.debug("Getting workflow templates for user's company with search: {}, category: {}, page: {}, size: {}", 
+                 search, category, page, size);
         
         UUID companyId = getCompanyIdFromJwt(request);
-        List<WorkflowTemplateDto> templates = workflowService.getWorkflowTemplatesByCompany(companyId);
+        Page<WorkflowTemplateDto> templates = workflowService.getWorkflowTemplatesByCompanyWithPagination(
+                companyId, search, category, page, size, sortBy, sortDir);
         
-        return ResponseEntity.ok(ApiResponse.<List<WorkflowTemplateDto>>builder()
+        return ResponseEntity.ok(ApiResponse.<Page<WorkflowTemplateDto>>builder()
                 .success(true)
                 .message("Workflow templates retrieved successfully")
                 .data(templates)

@@ -111,6 +111,7 @@ public class WorkflowTemplateDetailResponse {
         private String templateNotes;
         private Instant createdAt;
         private Instant updatedAt;
+        private Boolean customerSelectable;
     }
     
     @Data

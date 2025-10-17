@@ -232,14 +232,15 @@ public class CompanySupplierRelationshipController {
     }
 
     /**
-     * Get suppliers by category for a company
+     * Get active suppliers by category for a company (lightweight response)
      */
     @GetMapping("/by-category/{categoryId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('PROJECT_MANAGER') or hasRole('TRADIE')")
-    @Operation(summary = "Get suppliers by category", 
-               description = "Retrieve suppliers for the authenticated user's company that have the specified category, ordered by preference and rating")
+    @Operation(summary = "Get active suppliers by category", 
+               description = "Retrieve ONLY ACTIVE suppliers for the authenticated user's company that have the specified category, " +
+                           "ordered by preference and rating. Returns lightweight response without preferred categories for better performance.")
     @ApiResponses(value = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Suppliers retrieved successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Active suppliers retrieved successfully"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden")
     })
     public ResponseEntity<ApiResponse<List<CompanySupplierRelationshipResponse>>> getSuppliersByCategory(
@@ -251,11 +252,11 @@ public class CompanySupplierRelationshipController {
                     .getSuppliersByCategory(companyId, categoryId);
             return ResponseEntity.ok(ApiResponse.<List<CompanySupplierRelationshipResponse>>builder()
                     .success(true)
-                    .message("Suppliers retrieved successfully")
+                    .message("Active suppliers retrieved successfully")
                     .data(suppliers)
                     .build());
         } catch (Exception e) {
-            log.error("Error retrieving suppliers by category", e);
+            log.error("Error retrieving active suppliers by category", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ApiResponse.<List<CompanySupplierRelationshipResponse>>builder()
                             .success(false)

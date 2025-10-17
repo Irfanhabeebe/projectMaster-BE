@@ -95,6 +95,10 @@ public class ProjectStepRequirement extends BaseEntity {
     @Column(name = "is_template_copied", nullable = false)
     private Boolean isTemplateCopied = false;
 
+    @Builder.Default
+    @Column(name = "customer_selectable", nullable = false)
+    private Boolean customerSelectable = true;
+
     /**
      * Procurement type options (same as WorkflowStepRequirement)
      */

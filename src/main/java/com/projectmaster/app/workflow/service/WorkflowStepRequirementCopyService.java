@@ -43,6 +43,7 @@ public class WorkflowStepRequirementCopyService {
                 .category(standardReq.getCategory()) // Use the same consumable category
                 .procurementType(WorkflowStepRequirement.ProcurementType.BUY) // Default procurement type
                 .isOptional(false) // Default to not optional
+                .customerSelectable(standardReq.getCustomerSelectable()) // Copy customer selectable flag
                 .build();
             
             workflowStepRequirementRepository.save(workflowReq);

@@ -71,6 +71,10 @@ public class WorkflowStepRequirement extends BaseEntity {
     @Column(name = "template_notes", columnDefinition = "TEXT")
     private String templateNotes;
 
+    @Builder.Default
+    @Column(name = "customer_selectable", nullable = false)
+    private Boolean customerSelectable = true;
+
     /**
      * Procurement type options
      */
